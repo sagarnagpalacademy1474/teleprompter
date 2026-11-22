@@ -123,7 +123,7 @@
       if (again || dirty) schedule(500);
     }, function (e) {
       busy = false; if (wasDirty) dirty = true;
-      if (e.auth) setState('needs-tap'); else setState('error', e.message);
+      if (e.auth) setState('needs-tap'); else setState('error', navigator.onLine === false || e instanceof TypeError ? 'No internet. Changes are saved on this device and will sync when you are back online.' : e.message);
       if (root.Log) root.Log.line('sync_error', e.message);
     });
   }
@@ -135,6 +135,7 @@
     start: function (onRemoteChange) {
       onRemote = onRemoteChange;
       root.Store.onChange(function () { if (!cfg.connected) return; dirty = true; schedule(2500); });
+      window.addEventListener('online', function () { syncNow(); });
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') syncNow(); });
       setInterval(function () { if (document.visibilityState === 'visible') syncNow(); }, 45000);
       if (cfg.connected) { setState(tokenOk() ? 'ok' : 'needs-tap'); syncNow(); }
