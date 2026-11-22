@@ -88,7 +88,7 @@ check('S2 reaches end', q7, s2.length);
 
 // ---- Commands heard through the Hindi mic ----
 var WAKE = 'prompter go, chalo shuru', RESTART = 'prompter restart, phir se shuru';
-[['प्रॉम्प्टर गो', 1], ['प्रोम्प्टर गो', 1], ['प्रॉम्प्टरगो', 1], ['ओके प्रॉम्प्टर गो', 1], ['prompter go', 1], ['prompt er go', 1],
+[['प्रमोटर गो', 1], ['प्रोमोटर गो', 1], ['promoter go', 1], ['pramotar go', 1], ['प्रॉम्प्टर गो', 1], ['प्रोम्प्टर गो', 1], ['प्रॉम्प्टरगो', 1], ['ओके प्रॉम्प्टर गो', 1], ['prompter go', 1], ['prompt er go', 1],
  ['चलो शुरू', 1], ['तो चलो शुरू करते', 0], ['इंस्टाग्राम पे सबकी', 0], ['गो', 0], ['चलो', 0]].forEach(function (c) {
   var got = C.endsWithPhrase(C.tokenizeSpeech(c[0]), WAKE) ? 1 : 0;
   check('wake "' + c[0] + '"', got, c[1]);

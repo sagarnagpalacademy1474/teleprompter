@@ -109,7 +109,8 @@
     <div class="field"><label>Fixed speed <span class="val" id="speedV"></span></label><input type="range" id="speed" min="10" max="300" step="5"></div>
     <div class="field"><label>Options</label>
       <div class="row"><label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="mirror"> Mirror</label>
-      <label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="showDebug"> Show what it hears</label></div></div>
+      <label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="showDebug"> Show what it hears</label>
+      <label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="sendLogs"> Send test logs to Claude</label></div></div>
   </div>
 
   <div id="warnings"></div>
@@ -170,7 +171,7 @@
   var DEFAULTS = {
     script: SAMPLE, scrollMode: 'voice', lang: 'en-IN', startMode: 'wake+firstline',
     wakePhrase: 'prompter go, chalo shuru', restartPhrase: 'prompter restart, phir se shuru', stopPhrase: 'prompter pause, ruk jao prompter',
-    fontSize: 56, lineHeight: 1.45, margin: 8, readingLine: 30, speed: 60, mirror: false, showDebug: true
+    fontSize: 56, lineHeight: 1.45, margin: 8, readingLine: 30, speed: 60, mirror: false, showDebug: true, sendLogs: true
   };
   var KEY = 'tp_proto_v1';
   var S = Object.assign({}, DEFAULTS);
@@ -183,7 +184,7 @@
 
   /* ---------------- Editor ---------------- */
   var FIELDS = ['scrollMode', 'lang', 'startMode', 'wakePhrase', 'restartPhrase', 'stopPhrase',
-    'fontSize', 'lineHeight', 'margin', 'readingLine', 'speed', 'mirror', 'showDebug'];
+    'fontSize', 'lineHeight', 'margin', 'readingLine', 'speed', 'mirror', 'showDebug', 'sendLogs'];
   var UNITS = { fontSize: 'px', lineHeight: '', margin: '%', readingLine: '% from top', speed: ' px/s' };
   $('script').value = S.script;
   FIELDS.forEach(function (f) {
@@ -268,6 +269,7 @@
   }
 
   function setMode(m) {
+    if (m !== mode) Log.line('mode', mode + '->' + m + ' pos=' + pos + ' take=' + take);
     mode = m;
     var el = $('mode');
     var label = { ready: 'Ready', countdown: 'Starting', running: 'Running', paused: 'Paused' }[m];
@@ -320,6 +322,36 @@
   function showOverlay(big, msg) { $('ovBig').textContent = big; $('ovMsg').textContent = msg || ''; $('overlay').classList.remove('hidden'); }
   function hideOverlay() { $('overlay').classList.add('hidden'); }
 
+  /* ---------------- Test logs ----------------
+   * Every mic result, match, mode change and error goes to a private Google Sheet (via a Google Form)
+   * so Claude can see exactly what the iPad heard against the script. Turn off with "Send test logs".
+   */
+  var LOG_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScsDbEAiqqVBCB9FCTZHlUB19egytCcdDsVgIRAecCd7GCYgg/formResponse';
+  var LOG_FIELD = 'entry.1536478842';
+  var Log = (function () {
+    var sid = Math.random().toString(36).slice(2, 8), seq = 0, buf = [], t0 = Date.now(), timer = null;
+    function line(ev, data) {
+      if (!S.sendLogs) return;
+      buf.push(((Date.now() - t0) / 1000).toFixed(2) + ' ' + ev + (data !== undefined ? ' ' + (typeof data === 'string' ? data : JSON.stringify(data)) : ''));
+      if (!timer) timer = setTimeout(flush, 4000);
+      if (buf.length > 150) flush();
+    }
+    function flush(useBeacon) {
+      clearTimeout(timer); timer = null;
+      if (!buf.length) return;
+      var body = 'sid=' + sid + ' seq=' + (seq++) + ' at=' + new Date().toISOString() + '\n' + buf.join('\n');
+      buf = [];
+      var params = new URLSearchParams(); params.append(LOG_FIELD, body.slice(0, 40000));
+      try {
+        if (useBeacon && navigator.sendBeacon) navigator.sendBeacon(LOG_URL, params);
+        else fetch(LOG_URL, { method: 'POST', mode: 'no-cors', body: params }).catch(function () {});
+      } catch (e) {}
+    }
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(true); });
+    window.addEventListener('pagehide', function () { flush(true); });
+    return { line: line, flush: flush, sid: sid };
+  })();
+
   /* ---------------- Speech ---------------- */
   var rec = null, listening = false;
   var base = [], sessFinal = [], sessAll = [];
@@ -341,10 +373,13 @@
     rec = new SR();
     rec.lang = diag.lang || S.lang; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
     diag.lang = rec.lang;
-    rec.onstart = function () { diag.starts++; renderDiag(); };
+    rec.onstart = function () { diag.starts++; renderDiag(); Log.line('rec_start', rec.lang); };
     rec.onresult = function (e) {
       var fin = [], all = [], raw = [];
       diag.events++;
+      var newest = [];
+      for (var j = (e.resultIndex || 0); j < e.results.length; j++) newest.push((e.results[j].isFinal ? 'F:' : 'i:') + e.results[j][0].transcript);
+      Log.line('heard', newest.join(' | '));
       for (var i = 0; i < e.results.length; i++) {
         raw.push(e.results[i][0].transcript);
         var toks = Core.tokenizeSpeech(e.results[i][0].transcript);
@@ -357,6 +392,7 @@
     };
     rec.onerror = function (e) {
       diag.err = e.error + (e.message ? ' (' + e.message + ')' : ''); renderDiag();
+      Log.line('rec_error', diag.err);
       if (e.error === 'language-not-supported' && rec.lang !== 'en-IN') {
         // this device has no recognizer for the chosen language: fall back to English (India)
         diag.lang = 'en-IN';
@@ -371,6 +407,7 @@
       }
     };
     rec.onend = function () {
+      Log.line('rec_end');
       base = base.concat(sessFinal); sessFinal = []; sessAll = [];
       if (base.length > 600) { var cut = base.length - 300; base = base.slice(cut); mark = Math.max(0, mark - cut); utterStart = Math.max(0, utterStart - cut); prevLen = Math.max(0, prevLen - cut); }
       if (listening) {
@@ -403,23 +440,26 @@
     if (S.scrollMode !== 'voice') return;
 
     // Commands. While running, a command counts only if it is said alone after a pause.
-    if (S.restartPhrase && Core.isPhrase(utter, S.restartPhrase)) { restartTake(); return; }
+    if (S.restartPhrase && Core.isPhrase(utter, S.restartPhrase)) { Log.line('cmd', 'restart'); restartTake(); return; }
     if (mode === 'running') {
-      if (S.stopPhrase && Core.isPhrase(utter, S.stopPhrase)) { setMode('paused'); return; }
+      if (S.stopPhrase && Core.isPhrase(utter, S.stopPhrase)) { Log.line('cmd', 'pause'); setMode('paused'); return; }
     } else if (mode === 'ready' || mode === 'paused') {
       var wakeAllowed = mode === 'paused' || S.startMode.indexOf('wake') >= 0;
       if (S.wakePhrase && wakeAllowed && Core.endsWithPhrase(tail, S.wakePhrase)) {
+        Log.line('cmd', 'wake');
         startTake(mode === 'ready'); return;
       }
       if (mode === 'ready' && (S.startMode === 'firstline' || S.startMode === 'wake+firstline')) {
         var r0 = Core.locate(T, tail, 0, { window: [0, 15] });
-        if (r0 && r0.score >= 2.6) { setMode('running'); pos = r0.pos; paint(); lastMatchAt = now; }
+        if (r0 && r0.score >= 2.6) { Log.line('cmd', 'firstline score=' + r0.score.toFixed(2)); setMode('running'); pos = r0.pos; paint(); lastMatchAt = now; }
       }
       return;
     }
 
     if (mode !== 'running') return;
     var r = Core.locate(T, tail, pos);
+    Log.line('match', 'tail="' + tail.map(function (t) { return t.t; }).join(' ') + '" ' +
+      (r ? 'pos ' + pos + '->' + r.pos + ' word="' + (words[T[r.end].w] || '') + '" score=' + r.score.toFixed(2) : 'hold pos=' + pos));
     if (r) {
       pos = r.pos; lastMatchAt = now; paint();
       if (pos >= T.length - 1) endPending = true;
@@ -462,6 +502,8 @@
     S.script = $('script').value; save();
     $('editor').classList.add('hidden'); $('prompter').classList.remove('hidden');
     buildText(); take = 1; $('take').textContent = 'Take 1';
+    Log.line('session', { ua: navigator.userAgent, lang: S.lang, start: S.startMode, wake: S.wakePhrase, restart: S.restartPhrase, mode: S.scrollMode });
+    Log.line('script', S.script.replace(/\s+/g, ' ').slice(0, 3000));
     y = 0; goTop(); y = targetY;
     setMode('ready');
     updateMic();
@@ -471,6 +513,7 @@
     if (S.scrollMode === 'voice' && SR && !listening) { ovMic = true; showOverlay('🎙', 'Tap anywhere to turn on the microphone. After that it stays hands free.'); }
   }
   function closePrompter() {
+    Log.line('close'); Log.flush();
     micOff(); setMode('ready');
     if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
     $('prompter').classList.add('hidden'); $('editor').classList.remove('hidden'); hideOverlay();

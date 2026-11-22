@@ -82,7 +82,8 @@ check('numbers expand', C.tokenizeSpeech('45').map(function (t) { return t.t; })
 
 // 10. Wake / command phrases
 check('wake phrase detected', C.endsWithPhrase(C.tokenizeSpeech('okay prompter go'), 'prompter go') ? 1 : 0, 1);
-check('wake phrase fuzzy (prompt her go)', C.endsWithPhrase(C.tokenizeSpeech('teleprompter go'), 'prompter go') ? 1 : 0, 0);
+check('wake phrase near-miss teleprompter go accepted', C.endsWithPhrase(C.tokenizeSpeech('teleprompter go'), 'prompter go') ? 1 : 0, 1);
+check('wake phrase not triggered by normal speech', C.endsWithPhrase(C.tokenizeSpeech('we are going to talk about'), 'prompter go') ? 1 : 0, 0);
 check('phrase not in script', C.scriptContainsPhrase(T, 'prompter go') ? 1 : 0, 0);
 check('phrase in script warns', C.scriptContainsPhrase(T, 'see you') ? 1 : 0, 1);
 

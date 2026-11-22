@@ -241,9 +241,13 @@
       if (all) return 1;
     }
     var a = joined(toks, 't'), b = joined(P, 't');
-    if (joined(toks, 'key') === joined(P, 'key') && a.length) return 0.9;
-    var L = Math.max(a.length, b.length);
-    return L ? 1 - lev(a, b) / L : 0;
+    var ka = joined(toks, 'key'), kb = joined(P, 'key');
+    if (ka === kb && a.length) return 0.9;
+    var L = Math.max(a.length, b.length), KL = Math.max(ka.length, kb.length);
+    var textSim = L ? 1 - lev(a, b) / L : 0;
+    // sound-alike skeletons: "promoter go" / "pramotar go" vs "prompter go" differ by one letter
+    var keySim = KL >= 4 ? 1 - lev(ka, kb) / KL : 0;
+    return Math.max(textSim, keySim);
   }
   function matchesAt(toks, P) { return phraseSim(toks, P) >= 0.75; }
 
