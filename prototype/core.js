@@ -27,6 +27,61 @@
     return [String(n)];
   }
 
+  /* ---------- Devanagari -> Roman (rule based, tuned to how Hinglish is usually typed) ---------- */
+  var CONS = {
+    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'n',
+    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'n',
+    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
+    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
+    'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
+    'य': 'y', 'र': 'r', 'ल': 'l', 'ळ': 'l', 'व': 'v',
+    'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
+    // precomposed nukta letters
+    'क़': 'q', 'ख़': 'kh', 'ग़': 'g', 'ज़': 'z', 'ड़': 'd', 'ढ़': 'dh', 'फ़': 'f', 'य़': 'y'
+  };
+  var NUKTA = { k: 'q', kh: 'kh', g: 'g', j: 'z', d: 'd', dh: 'dh', ph: 'f', y: 'y' }; // ड़ is usually typed "d" (gaadi, padhai)
+  var VOW = { 'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ii', 'उ': 'u', 'ऊ': 'uu', 'ऋ': 'ri',
+    'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऑ': 'o', 'ऍ': 'e' };
+  var MATRA = { 'ा': 'aa', 'ि': 'i', 'ी': 'ii', 'ु': 'u', 'ू': 'uu', 'ृ': 'ri',
+    'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ॉ': 'o', 'ॅ': 'e' };
+
+  function deva2roman(word) {
+    var out = '', pending = false, i, ch;
+    for (i = 0; i < word.length; i++) {
+      ch = word[i];
+      if (CONS[ch] !== undefined) {
+        if (pending) out += 'a';
+        out += CONS[ch]; pending = true;
+      } else if (ch === '़') {           // nukta: change the previous consonant
+        var m = out.match(/(kh|ph|dh|[kgjdy])$/);
+        if (m) out = out.slice(0, -m[1].length) + NUKTA[m[1]];
+      } else if (MATRA[ch] !== undefined) {
+        out += MATRA[ch]; pending = false;
+      } else if (ch === '्') {            // virama: no vowel
+        pending = false;
+      } else if (VOW[ch] !== undefined) {
+        if (pending) out += 'a';
+        out += VOW[ch]; pending = false;
+      } else if (ch === 'ं' || ch === 'ँ') { // anusvara / chandrabindu
+        if (pending) out += 'a';
+        out += 'n'; pending = false;
+      } else if (ch === 'ः') {
+        if (pending) out += 'a';
+        out += 'h'; pending = false;
+      } else if (ch >= '०' && ch <= '९') {
+        if (pending) out += 'a';
+        out += String(ch.charCodeAt(0) - 0x966); pending = false;
+      } else {
+        if (pending) out += 'a';
+        pending = false;
+        out += ch;
+      }
+    }
+    // final inherent vowel is silent in Hindi ("ghar", not "ghara"), except one-letter words
+    if (pending && out.length <= 2) out += 'a';
+    return out;
+  }
+
   // Lowercase, strip accents/punctuation. Keeps a-z, 0-9 and Devanagari.
   function normWord(w) {
     w = String(w).toLowerCase();
@@ -37,7 +92,8 @@
 
   // Split a raw word into one or more normalized tokens (numbers expand).
   function expand(raw) {
-    var n = normWord(raw);
+    var n = normWord(String(raw).replace(/[।॥]/g, ''));
+    if (/[ऀ-ॿ]/.test(n)) n = normWord(deva2roman(n));
     if (!n) return [];
     if (/^\d+$/.test(n) && n.length <= 6) return numToWords(parseInt(n, 10));
     var m = n.match(/^(\d+)(st|nd|rd|th|s)$/);
@@ -75,8 +131,10 @@
   // Loose sound-alike key so small spelling / recognition differences match.
   function phoneticKey(w) {
     return w
+      .replace(/igh/g, 'i').replace(/ght/g, 't')      // English spellings: highlight, night
+      .replace(/[ts]ion/g, 'shn')                    // tension / टेंशन, celebration / सेलिब्रेशन
       .replace(/ph/g, 'f').replace(/ck/g, 'k').replace(/q/g, 'k').replace(/c(?=[eiy])/g, 's').replace(/c/g, 'k')
-      .replace(/z/g, 's').replace(/w/g, 'v').replace(/x/g, 'ks')
+      .replace(/z/g, 'j').replace(/w/g, 'v').replace(/x/g, 'ks').replace(/n(?=[pb])/g, 'm')
       .replace(/(.)\1+/g, '$1')         // collapse doubles: "aaj" -> "aj"
       .replace(/(?!^)[aeiouy]+/g, '')   // drop vowels except the first letter
       .replace(/h(?![aeiou])/g, '');
@@ -100,7 +158,7 @@
 
   var STOP = {};
   ('the a an to and of is in it i you we he she they this that for on at be are was so or as with my your our ' +
-    'hai ka ki ke ko se me mein ye vo to bhi na').split(' ').forEach(function (w) { STOP[w] = 1; });
+    'hai hain ka ki ke ko se me mein pe par aur ye yeh vo wo to bhi na ho').split(' ').forEach(function (w) { STOP[w] = 1; });
 
   // Similarity of two tokens in [0,1].
   function sim(a, b) {
@@ -194,7 +252,7 @@
   var api = {
     tokenizeScript: tokenizeScript, tokenizeSpeech: tokenizeSpeech, locate: locate,
     endsWithPhrase: endsWithPhrase, isPhrase: isPhrase, scriptContainsPhrase: scriptContainsPhrase,
-    normWord: normWord, phoneticKey: phoneticKey, sim: sim, DEFAULTS: DEFAULTS
+    normWord: normWord, phoneticKey: phoneticKey, deva2roman: deva2roman, sim: sim, DEFAULTS: DEFAULTS
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PrompterCore = api;

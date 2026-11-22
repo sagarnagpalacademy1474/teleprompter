@@ -87,7 +87,7 @@
     <div class="field"><label>Speech language</label>
       <select id="lang">
         <option value="en-IN">English (India)</option><option value="en-US">English (US)</option>
-        <option value="en-GB">English (UK)</option><option value="hi-IN">Hindi (early, phase 4)</option>
+        <option value="en-GB">English (UK)</option><option value="hi-IN">Hinglish / Hindi (Roman script)</option>
       </select></div>
     <div class="field"><label>Take starts by</label>
       <select id="startMode">
@@ -110,7 +110,7 @@
   </div>
 
   <div id="warnings"></div>
-  <div class="row" style="margin:6px 0 22px"><button class="primary" id="open">Open prompter</button><button id="sample">Load sample script</button></div>
+  <div class="row" style="margin:6px 0 22px"><button class="primary" id="open">Open prompter</button><button id="sample">English sample</button><button id="sampleH1">Hinglish sample 1</button><button id="sampleH2">Hinglish sample 2</button></div>
 
   <div class="help">
     <b>How to test:</b> open the prompter and tap <b>Mic on</b> once (the browser asks for microphone permission).
@@ -120,6 +120,7 @@
     When you finish the last line and stop for 2 seconds, the take ends and the script returns to the top, ready for the next take.
     Say the restart phrase after a short pause to begin a fresh take at any time. Tap any word to jump there.
     Keyboard: Space start or pause, R restart, Esc back.
+    <br><br><b>Hinglish scripts:</b> choose "Hinglish / Hindi (Roman script)" as the speech language. The mic then listens in Hindi, and the app converts what it hears to Roman letters before matching, so a script typed as "gaadi" still matches when the mic writes गाड़ी.
   </div>
 </div>
 
@@ -155,6 +156,14 @@
     "to remember what you learned.\n\nThe third habit is revising before you sleep. Start with these three habits and " +
     "see the difference in just two weeks. Thanks for watching, see you in the next video.";
 
+  var SAMPLE_H1 = "Instagram pe sabki highlight reel dikhti hai. Nayi gaadi, naya ghar, celebration. Unki EMI, unki tension, " +
+    "unke struggle wale din nahi dikhte.\nAur aap apne behind-the-scenes ko unki highlight reel se compare kar rahe ho.\n" +
+    "Kisi aur ki progress aapki failure nahi hai.\nUnki achievements ke liye khushi manao, lekin apni achievements ke liye jaan laga do…";
+  var SAMPLE_H2 = "Exam se pehle raat ko sabse badi galti jo students karte hain, wo hai poori raat jaag kar padhna. " +
+    "Aapka dimaag thaka hua hota hai, aur jo padha hai wo bhi yaad nahi rehta.\n\nIsliye exam se ek din pehle sirf revision karo, " +
+    "naya chapter mat uthao. Raat ko kam se kam saat ghante ki neend lo. Subah halka breakfast karo aur paani peete raho.\n\n" +
+    "Yaad rakhna, fresh dimaag hi aapka sabse bada hathiyaar hai.";
+
   var DEFAULTS = {
     script: SAMPLE, scrollMode: 'voice', lang: 'en-IN', startMode: 'wake+firstline',
     wakePhrase: 'prompter go', restartPhrase: 'prompter restart', stopPhrase: 'prompter pause',
@@ -182,7 +191,12 @@
     if ($(f + 'V')) $(f + 'V').textContent = S[f] + (UNITS[f] || '');
   });
   $('script').addEventListener('input', function () { S.script = $('script').value; save(); checkWarnings(); });
-  $('sample').onclick = function () { $('script').value = S.script = SAMPLE; save(); checkWarnings(); };
+  function loadSample(text, lang) {
+    $('script').value = S.script = text; S.lang = lang; $('lang').value = lang; save(); checkWarnings();
+  }
+  $('sample').onclick = function () { loadSample(SAMPLE, 'en-IN'); };
+  $('sampleH1').onclick = function () { loadSample(SAMPLE_H1, 'hi-IN'); };
+  $('sampleH2').onclick = function () { loadSample(SAMPLE_H2, 'hi-IN'); };
 
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) $('support').innerHTML = '<div class="notice bad">This browser has no speech recognition. Use Safari on iPad, or Chrome on Android or laptop. Fixed speed mode still works.</div>';
