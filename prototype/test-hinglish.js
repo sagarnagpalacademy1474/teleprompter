@@ -86,5 +86,19 @@ check('S2 went back a sentence', q6, after(s2, 'neend lo'));
 var q7 = speak(s2, 'सुबह हल्का ब्रेकफास्ट करो और पानी पीते रहो याद रखना फ्रेश दिमाग ही आपका सबसे बड़ा हथियार है', q6);
 check('S2 reaches end', q7, s2.length);
 
+// ---- Commands heard through the Hindi mic ----
+var WAKE = 'prompter go, chalo shuru', RESTART = 'prompter restart, phir se shuru';
+[['प्रॉम्प्टर गो', 1], ['प्रोम्प्टर गो', 1], ['प्रॉम्प्टरगो', 1], ['ओके प्रॉम्प्टर गो', 1], ['prompter go', 1], ['prompt er go', 1],
+ ['चलो शुरू', 1], ['तो चलो शुरू करते', 0], ['इंस्टाग्राम पे सबकी', 0], ['गो', 0], ['चलो', 0]].forEach(function (c) {
+  var got = C.endsWithPhrase(C.tokenizeSpeech(c[0]), WAKE) ? 1 : 0;
+  check('wake "' + c[0] + '"', got, c[1]);
+});
+[['प्रॉम्प्टर रीस्टार्ट', 1], ['प्रोम्प्टर री स्टार्ट', 1], ['फिर से शुरू', 1], ['फिर से शुरू करो यार अभी', 0], ['किसी और की प्रोग्रेस', 0]].forEach(function (c) {
+  var got = C.isPhrase(C.tokenizeSpeech(c[0]), RESTART) ? 1 : 0;
+  check('restart "' + c[0] + '"', got, c[1]);
+});
+check('wake not in script 1', C.scriptContainsPhrase(s1, WAKE) ? 1 : 0, 0);
+check('wake not in script 2', C.scriptContainsPhrase(s2, WAKE) ? 1 : 0, 0);
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nALL PASSED');
 process.exit(fails ? 1 : 0);

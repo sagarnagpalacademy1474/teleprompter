@@ -59,7 +59,10 @@
   .pill.ready { color: var(--warn); } .pill.running { color: var(--ok); } .pill.paused { color: var(--muted); } .pill.count { color: var(--accent); }
   #mic.on { color: var(--ok); } #mic.off { color: var(--bad); }
   #debug { position: absolute; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 70px); font-size: 13px; color: var(--muted);
-    background: #000a; border-radius: 8px; padding: 6px 10px; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    background: #000c; border-radius: 8px; padding: 6px 10px; pointer-events: none; }
+  #debug div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.5; }
+  #debug b { color: var(--text); font-weight: 600; }
+  #debug .err { color: var(--bad); }
   #controls { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
     padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px); background: linear-gradient(#0000, #000d); transition: opacity .3s; }
   #controls.dim { opacity: .12; }
@@ -96,9 +99,9 @@
         <option value="firstline">Speaking the first line</option>
         <option value="auto">Immediately on open</option>
       </select></div>
-    <div class="field"><label>Wake phrase (start / resume)</label><input type="text" id="wakePhrase"></div>
-    <div class="field"><label>Restart phrase (new take)</label><input type="text" id="restartPhrase"></div>
-    <div class="field"><label>Pause phrase</label><input type="text" id="stopPhrase"></div>
+    <div class="field"><label>Wake phrases (start / resume, comma separated)</label><input type="text" id="wakePhrase"></div>
+    <div class="field"><label>Restart phrases (new take)</label><input type="text" id="restartPhrase"></div>
+    <div class="field"><label>Pause phrases</label><input type="text" id="stopPhrase"></div>
     <div class="field"><label>Font size <span class="val" id="fontSizeV"></span></label><input type="range" id="fontSize" min="24" max="120" step="2"></div>
     <div class="field"><label>Line spacing <span class="val" id="lineHeightV"></span></label><input type="range" id="lineHeight" min="1" max="2.2" step="0.05"></div>
     <div class="field"><label>Side margin <span class="val" id="marginV"></span></label><input type="range" id="margin" min="0" max="30" step="1"></div>
@@ -166,12 +169,16 @@
 
   var DEFAULTS = {
     script: SAMPLE, scrollMode: 'voice', lang: 'en-IN', startMode: 'wake+firstline',
-    wakePhrase: 'prompter go', restartPhrase: 'prompter restart', stopPhrase: 'prompter pause',
+    wakePhrase: 'prompter go, chalo shuru', restartPhrase: 'prompter restart, phir se shuru', stopPhrase: 'prompter pause, ruk jao prompter',
     fontSize: 56, lineHeight: 1.45, margin: 8, readingLine: 30, speed: 60, mirror: false, showDebug: true
   };
   var KEY = 'tp_proto_v1';
   var S = Object.assign({}, DEFAULTS);
   try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+  // upgrade the old single-phrase defaults to the new ones (keeps anything the user typed)
+  if (S.wakePhrase === 'prompter go') S.wakePhrase = DEFAULTS.wakePhrase;
+  if (S.restartPhrase === 'prompter restart') S.restartPhrase = DEFAULTS.restartPhrase;
+  if (S.stopPhrase === 'prompter pause') S.stopPhrase = DEFAULTS.stopPhrase;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 
   /* ---------------- Editor ---------------- */
@@ -266,7 +273,7 @@
     var label = { ready: 'Ready', countdown: 'Starting', running: 'Running', paused: 'Paused' }[m];
     if (m === 'ready' && S.scrollMode === 'voice') {
       var hints = [];
-      if (S.startMode.indexOf('wake') >= 0) hints.push('say "' + S.wakePhrase + '"');
+      if (S.startMode.indexOf('wake') >= 0) hints.push('say ' + S.wakePhrase.split(',').map(function (x) { return '"' + x.trim() + '"'; }).join(' or '));
       if (S.startMode.indexOf('firstline') >= 0) hints.push('read line 1');
       if (hints.length) label += ': ' + hints.join(' or ');
     }
@@ -317,6 +324,7 @@
   var rec = null, listening = false;
   var base = [], sessFinal = [], sessAll = [];
   var mark = 0, prevLen = 0, utterStart = 0;
+  var diag = { events: 0, raw: '', err: '', lang: '', restarts: 0, starts: 0 };
 
   function heardAll() { return base.concat(sessAll); }
   function resetHeard() { mark = heardAll().length; utterStart = mark; prevLen = mark; }
@@ -324,25 +332,38 @@
   function micOn() {
     if (!SR) { showOverlay('!', 'Speech recognition is not available in this browser.'); setTimeout(hideOverlay, 2500); return; }
     if (listening) return;
-    listening = true; startRec(); updateMic();
+    listening = true; diag.lang = ''; diag.err = ''; startRec(); updateMic(); renderDiag();
   }
   function micOff() { listening = false; if (rec) try { rec.stop(); } catch (e) {} updateMic(); }
   function updateMic() { var m = $('mic'); m.textContent = listening ? 'Mic on' : 'Mic off'; m.className = 'pill ' + (listening ? 'on' : 'off'); $('bMic').textContent = listening ? 'Mic off' : 'Mic on'; m.id = 'mic'; }
 
   function startRec() {
     rec = new SR();
-    rec.lang = S.lang; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    rec.lang = diag.lang || S.lang; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    diag.lang = rec.lang;
+    rec.onstart = function () { diag.starts++; renderDiag(); };
     rec.onresult = function (e) {
-      var fin = [], all = [];
+      var fin = [], all = [], raw = [];
+      diag.events++;
       for (var i = 0; i < e.results.length; i++) {
+        raw.push(e.results[i][0].transcript);
         var toks = Core.tokenizeSpeech(e.results[i][0].transcript);
         if (e.results[i].isFinal) fin = fin.concat(toks);
         all = all.concat(toks);
       }
       sessFinal = fin; sessAll = all;
+      diag.raw = raw.join(' ').slice(-140); diag.err = '';
       onSpeech();
     };
     rec.onerror = function (e) {
+      diag.err = e.error + (e.message ? ' (' + e.message + ')' : ''); renderDiag();
+      if (e.error === 'language-not-supported' && rec.lang !== 'en-IN') {
+        // this device has no recognizer for the chosen language: fall back to English (India)
+        diag.lang = 'en-IN';
+        showOverlay('!', 'This device cannot listen in ' + S.lang + '. Switched the mic to English (India). Roman Hinglish still matches, a bit less accurately.');
+        setTimeout(hideOverlay, 4000);
+        return;
+      }
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         listening = false; updateMic();
         showOverlay('!', 'Microphone permission was denied. Allow it in the browser settings and tap Mic on again.');
@@ -352,7 +373,15 @@
     rec.onend = function () {
       base = base.concat(sessFinal); sessFinal = []; sessAll = [];
       if (base.length > 600) { var cut = base.length - 300; base = base.slice(cut); mark = Math.max(0, mark - cut); utterStart = Math.max(0, utterStart - cut); prevLen = Math.max(0, prevLen - cut); }
-      if (listening) setTimeout(function () { if (listening) try { rec.start(); } catch (err) { startRec(); } }, 120);
+      if (listening) {
+        diag.restarts++;
+        var r0 = rec;
+        setTimeout(function () {
+          if (!listening) return;
+          if (diag.lang !== r0.lang) { startRec(); return; }  // language changed: new recognizer
+          try { r0.start(); } catch (err) { startRec(); }
+        }, diag.err ? 600 : 120);
+      }
     };
     try { rec.start(); } catch (e) {}
   }
@@ -397,9 +426,16 @@
     }
   }
 
-  function debug(tail) {
+  var lastTail = [];
+  function debug(tail) { lastTail = tail; renderDiag(); }
+  function renderDiag() {
     if (!S.showDebug) return;
-    $('debug').textContent = 'Hearing: ' + tail.map(function (t) { return t.t; }).join(' ');
+    var e = function (x) { return escapeHtml(x || ''); };
+    $('debug').innerHTML =
+      '<div><b>Mic</b> ' + (listening ? 'on' : 'off') + ' · ' + e(diag.lang || S.lang) + ' · results ' + diag.events +
+      ' · restarts ' + diag.restarts + (diag.err ? ' · <span class="err">error: ' + e(diag.err) + '</span>' : '') + '</div>' +
+      '<div><b>Mic wrote</b> ' + e(diag.raw || '(nothing yet)') + '</div>' +
+      '<div><b>Matching as</b> ' + e(lastTail.map(function (t) { return t.t; }).join(' ')) + '</div>';
   }
 
   /* ---------------- Loop ---------------- */

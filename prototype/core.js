@@ -226,27 +226,52 @@
   }
 
   // Does the end of `spoken` equal `phrase` (fuzzy)? Used for wake / command phrases.
+  // Command phrases. `phrase` may hold several alternatives separated by commas
+  // ("prompter go, chalo shuru"). Matching is forgiving about how the mic splits words:
+  // "prompter go", "prompt er go" and "prompterGo" all count.
+  function alternatives(phrase) {
+    return String(phrase || '').split(',').map(function (p) { return tokenizeSpeech(p); })
+      .filter(function (P) { return P.length; });
+  }
+  function joined(toks, f) { return toks.map(function (t) { return t[f]; }).join(''); }
+  function phraseSim(toks, P) {
+    if (toks.length === P.length) {
+      var all = true;
+      for (var i = 0; i < P.length; i++) if (sim(toks[i], P[i]) < 0.6) { all = false; break; }
+      if (all) return 1;
+    }
+    var a = joined(toks, 't'), b = joined(P, 't');
+    if (joined(toks, 'key') === joined(P, 'key') && a.length) return 0.9;
+    var L = Math.max(a.length, b.length);
+    return L ? 1 - lev(a, b) / L : 0;
+  }
+  function matchesAt(toks, P) { return phraseSim(toks, P) >= 0.75; }
+
   function endsWithPhrase(spoken, phrase) {
-    var P = tokenizeSpeech(phrase);
-    if (!P.length || spoken.length < P.length) return false;
-    var tail = spoken.slice(-P.length);
-    for (var i = 0; i < P.length; i++) if (sim(tail[i], P[i]) < 0.6) return false;
-    return true;
+    return alternatives(phrase).some(function (P) {
+      for (var k = Math.max(1, P.length - 1); k <= P.length + 2; k++) {
+        if (spoken.length < k) break;
+        if (matchesAt(spoken.slice(-k), P)) return true;
+      }
+      return false;
+    });
   }
 
   function isPhrase(spoken, phrase) {
-    var P = tokenizeSpeech(phrase);
-    return spoken.length === P.length && endsWithPhrase(spoken, phrase);
+    return spoken.length > 0 && spoken.length <= 8 && alternatives(phrase).some(function (P) {
+      return spoken.length <= P.length + 2 && matchesAt(spoken, P);
+    });
   }
 
-  // Does the phrase appear anywhere in the script? (warn the user)
+  // Does any alternative appear in the script? (warn the user)
   function scriptContainsPhrase(tokens, phrase) {
-    var P = tokenizeSpeech(phrase);
-    outer: for (var i = 0; i + P.length <= tokens.length; i++) {
-      for (var j = 0; j < P.length; j++) if (sim(tokens[i + j], P[j]) < 0.6) continue outer;
-      return true;
-    }
-    return false;
+    return alternatives(phrase).some(function (P) {
+      outer: for (var i = 0; i + P.length <= tokens.length; i++) {
+        for (var j = 0; j < P.length; j++) if (sim(tokens[i + j], P[j]) < 0.6) continue outer;
+        return true;
+      }
+      return false;
+    });
   }
 
   var api = {
