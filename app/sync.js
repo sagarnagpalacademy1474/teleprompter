@@ -7,7 +7,7 @@
 (function (root) {
   'use strict';
   // OAuth client id from Google Cloud Console (Web application). Can also be set in Settings.
-  var DEFAULT_CLIENT_ID = '';
+  var DEFAULT_CLIENT_ID = '404064630931-ci6eob8ui78pvki7khfa4e75v36nhd3e.apps.googleusercontent.com';
   var SCOPE = 'https://www.googleapis.com/auth/drive.file';
   var FILE_NAME = 'Teleprompter data.json', FOLDER_NAME = 'Teleprompter';
   var LS = 'tp_sync_v1';
