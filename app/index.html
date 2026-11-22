@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prompter">
+<meta name="theme-color" content="#0d1014">
+<title>Prompter</title>
+<script>var BUILD = '2026-11-22.6';</script>
+<link rel="stylesheet" href="app.css?v=2026-11-22.6">
+</head>
+<body>
+
+<header class="top">
+  <span class="brand" id="brand">&#127908; <span class="brand-text">Prompter</span></span>
+  <input type="search" class="search" id="search" placeholder="Search all scripts" autocomplete="off">
+  <button class="icon" id="gear" title="Settings" aria-label="Settings">&#9881;&#65039;</button>
+</header>
+
+<main id="view"></main>
+
+<!-- prompter -->
+<div id="prompter" class="hidden">
+  <div id="pStage"><div id="pText"></div></div>
+  <div id="pReadline"></div>
+  <div id="pHud">
+    <span class="pill" id="pMode">Ready</span>
+    <span class="mid"><span id="pTitle"></span><span class="pill" id="pTake">Take 1</span></span>
+    <span class="pill" id="pMic">Mic off</span>
+  </div>
+  <div id="pDebug" class="hidden"></div>
+  <div id="pControls">
+    <button id="pMicBtn">Mic on</button>
+    <button id="pPlay">Start</button>
+    <button id="pRestart">Restart</button>
+    <span class="font"><button id="pFontDown" aria-label="Smaller text">A&minus;</button><span id="pFontVal"></span><button id="pFontUp" aria-label="Bigger text">A+</button></span>
+    <button id="pBack">Back</button>
+  </div>
+  <div id="pOverlay" class="hidden"><div id="pOvBig"></div><div id="pOvMsg"></div></div>
+</div>
+
+<script src="core.js?v=2026-11-22.6"></script>
+<script src="log.js?v=2026-11-22.6"></script>
+<script src="store.js?v=2026-11-22.6"></script>
+<script src="settings.js?v=2026-11-22.6"></script>
+<script src="prompter.js?v=2026-11-22.6"></script>
+<script src="app.js?v=2026-11-22.6"></script>
+</body>
+</html>
