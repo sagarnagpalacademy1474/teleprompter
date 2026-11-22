@@ -300,7 +300,7 @@
     });
   }
 
-  var VERSION = '2026-11-22.6';
+  var VERSION = '2026-11-22.7';
   var api = {
     VERSION: VERSION,
     tokenizeScript: tokenizeScript, tokenizeSpeech: tokenizeSpeech, locate: locate,

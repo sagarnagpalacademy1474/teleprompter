@@ -244,9 +244,13 @@
       });
       $('edWarn').innerHTML = warn.map(function (w) { return '<p class="muted" style="color:var(--warn)">' + w + '</p>'; }).join('');
     }
+    var shown = { title: s.title, body: s.body, folderId: s.folderId || null };
     function save() {
       clearTimeout(saveTimer);
-      Store.updateScript(id, { title: $('edTitle').value.trim() || 'Untitled script', body: $('edBody').value, folderId: $('edFolder').value || null });
+      if (!Store.script(id) || !$('edBody')) return;
+      var patch = { title: $('edTitle').value.trim() || 'Untitled script', body: $('edBody').value, folderId: $('edFolder').value || null };
+      // only write what the user changed here, so a newer copy from another device is not overwritten
+      if (patch.title !== shown.title || patch.body !== shown.body || patch.folderId !== shown.folderId) { Store.updateScript(id, patch); shown = patch; }
       $('edSaved').textContent = 'Saved';
     }
     function later() { $('edSaved').textContent = 'Saving...'; clearTimeout(saveTimer); saveTimer = setTimeout(save, 600); stats(); }
@@ -272,11 +276,53 @@
     view.innerHTML = '<div class="crumbs"><a href="#/">All scripts</a><span class="sep">/</span><span>Settings</span></div>' +
       '<div class="lib-head"><h1>Global settings</h1></div>' +
       '<p class="muted" style="line-height:1.5;margin-top:-6px">These are the defaults for every script. A folder or a single script can change any of them for itself.</p>' +
+      '<div class="drive-box" id="driveBox"></div>' +
       '<div id="gform"></div><p class="muted">Version ' + esc(root.BUILD) + (Core.VERSION !== root.BUILD ? ' (old files cached: reload the page)' : '') + '</p>';
     Settings.renderForm($('gform'), {
       level: 'global', own: Settings.defaultsMerged(), inherited: { values: Settings.defaults(), source: {} },
       onChange: function (own) { Store.setGlobal(own); }
     });
+    drawDriveBox();
+  }
+
+  /* ---------------- Drive sync UI ---------------- */
+  function syncLabel(st) {
+    if (!st.connected) return 'Drive';
+    return { ok: 'Synced', syncing: 'Syncing', 'needs-tap': 'Tap to sync', error: 'Sync error', off: 'Drive' }[st.state] || 'Drive';
+  }
+  function drawSyncBtn() {
+    var st = root.Sync.status(), b = $('syncBtn');
+    b.dataset.s = st.connected ? st.state : 'off';
+    $('syncTxt').textContent = syncLabel(st);
+    b.title = st.error || (st.lastSync ? 'Last synced ' + ago(st.lastSync) : 'Google Drive sync');
+  }
+  function connectDrive() {
+    root.Sync.connect().then(function () { drawDriveBox(); }, function (e) { toast(e.message); drawDriveBox(); });
+  }
+  function drawDriveBox() {
+    var box = $('driveBox'); if (!box) return;
+    var st = root.Sync.status(), h = ['<h3>Google Drive sync</h3>'];
+    if (!st.hasClientId) {
+      h.push('<div class="muted">Sync keeps your scripts, folders and settings the same on iPad, laptop and phone. It needs a Google sign-in client ID, which is being set up.</div>');
+    } else if (!st.connected) {
+      h.push('<div>Not connected. Your scripts are saved only on this device.</div><div class="muted">The app gets access only to the one file it creates in a "Teleprompter" folder in your Drive, not to the rest of your Drive.</div>');
+      h.push('<div class="btns"><button class="primary" id="drvConnect">Connect Google Drive</button></div>');
+    } else {
+      h.push('<div>Connected. ' + (st.state === 'syncing' ? 'Syncing now...' : st.lastSync ? 'Last synced ' + ago(st.lastSync) + '.' : '') + '</div>');
+      if (st.state === 'needs-tap') h.push('<div class="muted">Google sign-in has expired on this device. Tap Sync now to continue.</div>');
+      if (st.state === 'error') h.push('<div class="err">' + esc(st.error) + '</div>');
+      h.push('<div class="btns"><button class="primary" id="drvSync">Sync now</button>' +
+        (st.fileId ? '<a class="button-like" target="_blank" rel="noopener" href="https://drive.google.com/file/d/' + esc(st.fileId) + '/view"><button>Open file in Drive</button></a>' : '') +
+        '<button id="drvOff">Disconnect this device</button></div>');
+    }
+    h.push('<details style="margin-top:10px"><summary class="muted">Advanced: sign-in client ID</summary><input type="text" id="drvCid" placeholder="xxxx.apps.googleusercontent.com" value="' + esc(st.clientId) + '"></details>');
+    box.innerHTML = h.join('');
+    var c = $('drvConnect'); if (c) c.onclick = connectDrive;
+    c = $('drvSync'); if (c) c.onclick = connectDrive;
+    c = $('drvOff'); if (c) c.onclick = function () {
+      confirmBox('Disconnect Google Drive?', 'This device stops syncing. Your scripts stay on this device and in Drive.', 'Disconnect', function () { root.Sync.disconnect(); drawDriveBox(); });
+    };
+    $('drvCid').onchange = function () { root.Sync.setClientId(this.value); drawDriveBox(); };
   }
 
   /* ---------------- prompter route ---------------- */
@@ -321,8 +367,10 @@
     { title: 'Highlight reel (Hinglish)', lang: 'hi-IN', body: "Instagram pe sabki highlight reel dikhti hai. Nayi gaadi, naya ghar, celebration. Unki EMI, unki tension, unke struggle wale din nahi dikhte.\nAur aap apne behind-the-scenes ko unki highlight reel se compare kar rahe ho.\nKisi aur ki progress aapki failure nahi hai.\nUnki achievements ke liye khushi manao, lekin apni achievements ke liye jaan laga do…" },
     { title: 'Exam se pehle raat (Hinglish)', lang: 'hi-IN', body: "Exam se pehle raat ko sabse badi galti jo students karte hain, wo hai poori raat jaag kar padhna. Aapka dimaag thaka hua hota hai, aur jo padha hai wo bhi yaad nahi rehta.\n\nIsliye exam se ek din pehle sirf revision karo, naya chapter mat uthao. Raat ko kam se kam saat ghante ki neend lo. Subah halka breakfast karo aur paani peete raho.\n\nYaad rakhna, fresh dimaag hi aapka sabse bada hathiyaar hai." }
   ];
+  // Samples get fixed ids and a very old change time, so seeding a new device never
+  // overwrites (or duplicates) the copies that are already in Drive.
   function seed() {
-    var f = Store.createFolder('Samples', null);
+    var f = Store.createFolder('Samples', null, 'samples');
     // carry over phrases the prototype saved on this device
     try {
       var p = JSON.parse(localStorage.getItem('tp_proto_v1') || 'null');
@@ -337,8 +385,12 @@
     } catch (e) {}
     var t = Date.now();
     SAMPLES.forEach(function (s, i) {
-      Store.createScript({ title: s.title, body: s.body, folderId: f.id, settings: s.lang !== 'en-IN' ? { lang: s.lang } : {}, createdAt: t - i * 1000, updatedAt: t - i * 1000 });
+      Store.createScript({ id: 'sample' + (i + 1), title: s.title, body: s.body, folderId: f.id, settings: s.lang !== 'en-IN' ? { lang: s.lang } : {}, createdAt: t - i * 1000, updatedAt: t - i * 1000 });
     });
+    var d = Store.exportAll();
+    Object.keys(d.folders).concat(Object.keys(d.scripts)).forEach(function (id) { (d.folders[id] || d.scripts[id])._m = 1; });
+    d.globalAt = Object.keys(d.global).length ? 1 : 0;
+    return Store.replaceAll(d);
   }
 
   /* ---------------- boot ---------------- */
@@ -347,6 +399,19 @@
   Prompter.wire();
   $('brand').onclick = function () { go('#/'); };
   $('gear').onclick = function () { go('#/settings'); };
+  $('syncBtn').onclick = function () {
+    var st = root.Sync.status();
+    if (st.connected && st.state === 'needs-tap') connectDrive(); else if (st.connected && st.state !== 'error') root.Sync.syncNow(); else go('#/settings');
+  };
+  root.Sync.onStatus(function () {
+    drawSyncBtn();
+    if (location.hash === '#/settings' && !document.querySelector('#drvCid:focus')) drawDriveBox();
+    if (root.Sync.pendingRender && root.Sync.status().state === 'ok') {
+      var a = document.activeElement;
+      if (!Prompter.isOpen() && !document.querySelector('.modal-bg') && !(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) { root.Sync.pendingRender = false; render(); }
+    }
+  });
+  drawSyncBtn();
   var sTimer = null;
   $('search').oninput = function () {
     clearTimeout(sTimer);
@@ -356,7 +421,14 @@
   window.addEventListener('hashchange', render);
   window.addEventListener('pagehide', function () { if (leaveEditor) leaveEditor(); });
   Store.init().then(function () {
-    if (Store.isEmpty()) seed();
+    return Store.isEmpty() && !Object.keys(Store.exportAll().deleted).length && !localStorage.getItem('tp_seeded') ? (localStorage.setItem('tp_seeded', '1'), seed()) : null;
+  }).then(function () {
     render();
+    if (root.Sync) root.Sync.start(function () {
+      // data changed from another device: redraw, but never under the user's typing or an open prompter
+      var a = document.activeElement;
+      if (Prompter.isOpen() || document.querySelector('.modal-bg') || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.id !== 'search')) { root.Sync.pendingRender = true; return; }
+      render();
+    });
   });
 })(this);

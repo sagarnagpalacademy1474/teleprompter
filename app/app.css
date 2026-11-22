@@ -146,3 +146,18 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 60px; }
   .lib-head h1 { font-size: 21px; }
   #pTitle { display: none; }
 }
+
+/* Drive sync */
+.sync-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; white-space: nowrap; }
+.sync-btn .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.sync-btn[data-s="ok"] .dot { background: var(--ok); }
+.sync-btn[data-s="syncing"] .dot { background: var(--accent); animation: syncpulse 1s infinite alternate; }
+.sync-btn[data-s="needs-tap"] .dot { background: var(--warn); }
+.sync-btn[data-s="error"] .dot { background: var(--bad); }
+@keyframes syncpulse { from { opacity: .3; } to { opacity: 1; } }
+@media (max-width: 560px) { #syncTxt { display: none; } }
+.drive-box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 18px; line-height: 1.5; }
+.drive-box h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.drive-box .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.drive-box input { width: 100%; margin-top: 6px; }
+.drive-box .err { color: var(--bad); }

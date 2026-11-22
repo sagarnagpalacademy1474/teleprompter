@@ -1,6 +1,7 @@
 /* Local data store: folders, scripts and global settings.
  * Everything lives in memory for instant reads and is written through to IndexedDB
- * (localStorage as a fallback). Phase 3 adds Google Drive sync on top of this.
+ * (localStorage as a fallback). sync.js merges it with a file in Google Drive (see merge.js).
+ * Every change stamps _m; deletes leave a tombstone in state.deleted so they sync too.
  *
  * folder: { id, name, parentId|null, settings:{}, createdAt, updatedAt }
  * script: { id, title, body, folderId|null, settings:{}, createdAt, updatedAt, openedAt }
@@ -8,7 +9,7 @@
 (function (root) {
   'use strict';
   var DB_NAME = 'teleprompter', DB_VER = 1;
-  var state = { folders: {}, scripts: {}, global: {} };
+  var state = { folders: {}, scripts: {}, global: {}, globalAt: 0, deleted: {} };
   var db = null, listeners = [];
 
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -46,17 +47,39 @@
   var LS_KEY = 'tp_app_v1';
   function lsSave() { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} }
 
+  function kvPut(key, val) { db.transaction('kv', 'readwrite').objectStore('kv').put(val, key); }
   function persist(kind, obj, del) {
+    var t = now();
+    if (kind === 'global') state.globalAt = t;
+    else if (del) state.deleted[obj.id] = t;
+    else obj._m = t;
     if (db) {
       try {
-        if (kind === 'global') db.transaction('kv', 'readwrite').objectStore('kv').put(state.global, 'global');
+        if (kind === 'global') { kvPut('global', state.global); kvPut('globalAt', state.globalAt); }
         else {
           var st = db.transaction(kind, 'readwrite').objectStore(kind);
-          if (del) st.delete(obj.id); else st.put(obj);
+          if (del) { st.delete(obj.id); kvPut('deleted', state.deleted); } else st.put(obj);
         }
       } catch (e) { lsSave(); }
     } else lsSave();
     listeners.forEach(function (fn) { try { fn(kind, obj, del); } catch (e) {} });
+  }
+  // replace everything (after a sync merge) without stamping or notifying change listeners
+  function writeAll() {
+    if (!db) return Promise.resolve(lsSave());
+    return new Promise(function (resolve) {
+      try {
+        var tx = db.transaction(['folders', 'scripts', 'kv'], 'readwrite');
+        ['folders', 'scripts'].forEach(function (k) {
+          var st = tx.objectStore(k); st.clear();
+          Object.keys(state[k]).forEach(function (id) { st.put(state[k][id]); });
+        });
+        var kv = tx.objectStore('kv');
+        kv.put(state.global, 'global'); kv.put(state.globalAt, 'globalAt'); kv.put(state.deleted, 'deleted');
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = tx.onabort = function () { lsSave(); resolve(); };
+      } catch (e) { lsSave(); resolve(); }
+    });
   }
 
   var Store = {
@@ -64,17 +87,22 @@
       return openDb().then(function (d) {
         db = d;
         if (!db) {
-          try { var s = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (s) state = s; } catch (e) {}
+          try { var s = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (s) state = Object.assign(state, s); } catch (e) {}
           return;
         }
-        return Promise.all([readAll('folders'), readAll('scripts'), readKv('global')]).then(function (r) {
+        return Promise.all([readAll('folders'), readAll('scripts'), readKv('global'), readKv('globalAt'), readKv('deleted')]).then(function (r) {
           r[0].forEach(function (f) { state.folders[f.id] = f; });
           r[1].forEach(function (s) { state.scripts[s.id] = s; });
-          state.global = r[2] || {};
+          state.global = r[2] || {}; state.globalAt = r[3] || 0; state.deleted = r[4] || {};
         });
       });
     },
     onChange: function (fn) { listeners.push(fn); },
+    exportAll: function () { return JSON.parse(JSON.stringify({ v: 1, folders: state.folders, scripts: state.scripts, global: state.global, globalAt: state.globalAt, deleted: state.deleted })); },
+    replaceAll: function (d) {
+      state = { folders: d.folders || {}, scripts: d.scripts || {}, global: d.global || {}, globalAt: d.globalAt || 0, deleted: d.deleted || {} };
+      return writeAll();
+    },
     isEmpty: function () { return !Object.keys(state.folders).length && !Object.keys(state.scripts).length; },
 
     // ---- global settings ----
@@ -89,8 +117,8 @@
         .sort(function (a, b) { return a.name.localeCompare(b.name); });
     },
     allFolders: function () { return Object.values(state.folders); },
-    createFolder: function (name, parentId) {
-      var f = { id: uid(), name: name || 'New folder', parentId: parentId || null, settings: {}, createdAt: now(), updatedAt: now() };
+    createFolder: function (name, parentId, id) {
+      var f = { id: id || uid(), name: name || 'New folder', parentId: parentId || null, settings: {}, createdAt: now(), updatedAt: now() };
       state.folders[f.id] = f; persist('folders', f); return f;
     },
     updateFolder: function (id, patch) {
