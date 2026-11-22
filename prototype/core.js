@@ -234,10 +234,27 @@
       .filter(function (P) { return P.length; });
   }
   function joined(toks, f) { return toks.map(function (t) { return t[f]; }).join(''); }
+  // Voiced/unvoiced pairs sound alike to the Hindi recognizer: "go" comes back as "को" (ko).
+  function devoice(k) { return k.replace(/g/g, 'k').replace(/d/g, 't').replace(/b/g, 'p'); }
+  function looseSim(a, b) {
+    var s = sim(a, b);
+    var ka = devoice(a.key), kb = devoice(b.key), L = Math.max(ka.length, kb.length);
+    if (ka === kb && ka) return Math.max(s, 0.85);
+    return Math.max(s, L >= 4 ? 1 - lev(ka, kb) / L : 0);
+  }
   function phraseSim(toks, P) {
     if (toks.length === P.length) {
       var all = true;
-      for (var i = 0; i < P.length; i++) if (sim(toks[i], P[i]) < 0.6) { all = false; break; }
+      for (var i = 0; i < P.length; i++) {
+        var ok = looseSim(toks[i], P[i]) >= 0.6;
+        // the last command word may come back glued to the next sound ("go" -> "गोम्स"):
+        // accept a spoken word that starts with the command word's sound, for short command words
+        if (!ok && i === P.length - 1 && P[i].t.length <= 3 && i > 0) {
+          var kp = devoice(P[i].key), ks = devoice(toks[i].key);
+          ok = kp.length > 0 && ks.indexOf(kp) === 0;
+        }
+        if (!ok) { all = false; break; }
+      }
       if (all) return 1;
     }
     var a = joined(toks, 't'), b = joined(P, 't');

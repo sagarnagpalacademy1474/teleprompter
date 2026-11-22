@@ -170,14 +170,14 @@
 
   var DEFAULTS = {
     script: SAMPLE, scrollMode: 'voice', lang: 'en-IN', startMode: 'wake+firstline',
-    wakePhrase: 'prompter go, chalo shuru', restartPhrase: 'prompter restart, phir se shuru', stopPhrase: 'prompter pause, ruk jao prompter',
+    wakePhrase: 'prompter go, chalo shuru, shuru karte hain', restartPhrase: 'prompter restart, phir se shuru', stopPhrase: 'prompter pause, ruk jao prompter',
     fontSize: 56, lineHeight: 1.45, margin: 8, readingLine: 30, speed: 60, mirror: false, showDebug: true, sendLogs: true
   };
   var KEY = 'tp_proto_v1';
   var S = Object.assign({}, DEFAULTS);
   try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
   // upgrade the old single-phrase defaults to the new ones (keeps anything the user typed)
-  if (S.wakePhrase === 'prompter go') S.wakePhrase = DEFAULTS.wakePhrase;
+  if (S.wakePhrase === 'prompter go' || S.wakePhrase === 'prompter go, chalo shuru') S.wakePhrase = DEFAULTS.wakePhrase;
   if (S.restartPhrase === 'prompter restart') S.restartPhrase = DEFAULTS.restartPhrase;
   if (S.stopPhrase === 'prompter pause') S.stopPhrase = DEFAULTS.stopPhrase;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }

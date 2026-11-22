@@ -87,9 +87,9 @@ var q7 = speak(s2, 'सुबह हल्का ब्रेकफास्ट 
 check('S2 reaches end', q7, s2.length);
 
 // ---- Commands heard through the Hindi mic ----
-var WAKE = 'prompter go, chalo shuru', RESTART = 'prompter restart, phir se shuru';
-[['प्रमोटर गो', 1], ['प्रोमोटर गो', 1], ['promoter go', 1], ['pramotar go', 1], ['प्रॉम्प्टर गो', 1], ['प्रोम्प्टर गो', 1], ['प्रॉम्प्टरगो', 1], ['ओके प्रॉम्प्टर गो', 1], ['prompter go', 1], ['prompt er go', 1],
- ['चलो शुरू', 1], ['तो चलो शुरू करते', 0], ['इंस्टाग्राम पे सबकी', 0], ['गो', 0], ['चलो', 0]].forEach(function (c) {
+var WAKE = 'prompter go, chalo shuru, chalo shuru karte hain, shuru karte hain', RESTART = 'prompter restart, phir se shuru';
+[['प्रमोटर को', 1], ['प्रमोटर गोम्स', 1], ['प्रोम', 0], ['प्रमोटर', 0], ['चलो शुरू करते हैं', 1], ['शुरू करते हैं', 1], ['प्रमोटर गो', 1], ['प्रोमोटर गो', 1], ['promoter go', 1], ['pramotar go', 1], ['प्रॉम्प्टर गो', 1], ['प्रोम्प्टर गो', 1], ['प्रॉम्प्टरगो', 1], ['ओके प्रॉम्प्टर गो', 1], ['prompter go', 1], ['prompt er go', 1],
+ ['चलो शुरू', 1], ['तो चलो शुरू करते', 1], ['इंस्टाग्राम पे सबकी', 0], ['गो', 0], ['चलो', 0]].forEach(function (c) {
   var got = C.endsWithPhrase(C.tokenizeSpeech(c[0]), WAKE) ? 1 : 0;
   check('wake "' + c[0] + '"', got, c[1]);
 });
@@ -99,6 +99,10 @@ var WAKE = 'prompter go, chalo shuru', RESTART = 'prompter restart, phir se shur
 });
 check('wake not in script 1', C.scriptContainsPhrase(s1, WAKE) ? 1 : 0, 0);
 check('wake not in script 2', C.scriptContainsPhrase(s2, WAKE) ? 1 : 0, 0);
+
+// ---- Real iPad output (from Tarun's test log, 2026-11-22) ----
+var real = speak(s1, 'पे सब की ली रील रखती है नई गाड़ी नवा घर', 0);
+check('real iPad line 1 (Instagram dropped, highlight heard as ली)', real, after(s1, 'naya ghar'), 1);
 
 console.log(fails ? '\n' + fails + ' FAILED' : '\nALL PASSED');
 process.exit(fails ? 1 : 0);
