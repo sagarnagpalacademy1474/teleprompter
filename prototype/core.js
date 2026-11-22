@@ -247,6 +247,11 @@
       var all = true;
       for (var i = 0; i < P.length; i++) {
         var ok = looseSim(toks[i], P[i]) >= 0.6;
+        // a long command word cut short by the mic ("prompter" -> "प्रोम"): accept a clear prefix of it
+        if (!ok && i < P.length - 1 && P[i].t.length >= 6) {
+          var ks0 = devoice(toks[i].key), kp0 = devoice(P[i].key);
+          ok = ks0.length >= 3 && kp0.indexOf(ks0) === 0;
+        }
         // the last command word may come back glued to the next sound ("go" -> "गोम्स"):
         // accept a spoken word that starts with the command word's sound, for short command words
         if (!ok && i === P.length - 1 && P[i].t.length <= 3 && i > 0) {
@@ -295,7 +300,9 @@
     });
   }
 
+  var VERSION = '2026-11-22.5';
   var api = {
+    VERSION: VERSION,
     tokenizeScript: tokenizeScript, tokenizeSpeech: tokenizeSpeech, locate: locate,
     endsWithPhrase: endsWithPhrase, isPhrase: isPhrase, scriptContainsPhrase: scriptContainsPhrase,
     normWord: normWord, phoneticKey: phoneticKey, deva2roman: deva2roman, sim: sim, DEFAULTS: DEFAULTS

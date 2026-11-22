@@ -78,7 +78,7 @@
 <!-- ============ EDITOR ============ -->
 <div id="editor">
   <h1>Prompter, voice tracking prototype</h1>
-  <div class="sub">Phase 1 test build. Script and settings are saved on this device only.</div>
+  <div class="sub">Phase 1 test build <span id="ver"></span>. Script and settings are saved on this device only.</div>
 
   <div id="support"></div>
 
@@ -147,11 +147,13 @@
   <div id="overlay" class="hidden"><div class="big" id="ovBig"></div><div class="msg" id="ovMsg"></div></div>
 </div>
 
-<script src="core.js"></script>
+<script>var BUILD = '2026-11-22.5';</script>
+<script src="core.js?v=2026-11-22.5"></script>
 <script>
 (function () {
   'use strict';
   var Core = window.PrompterCore;
+  document.getElementById('ver').textContent = 'v' + BUILD + (Core.VERSION !== BUILD ? ' (old matcher cached: reload the page)' : '');
   var $ = function (id) { return document.getElementById(id); };
 
   var SAMPLE = "Hello everyone and welcome back to the channel. Today we are going to talk about three simple habits " +
@@ -502,7 +504,7 @@
     S.script = $('script').value; save();
     $('editor').classList.add('hidden'); $('prompter').classList.remove('hidden');
     buildText(); take = 1; $('take').textContent = 'Take 1';
-    Log.line('session', { ua: navigator.userAgent, lang: S.lang, start: S.startMode, wake: S.wakePhrase, restart: S.restartPhrase, mode: S.scrollMode });
+    Log.line('session', { build: BUILD, core: Core.VERSION, ua: navigator.userAgent, lang: S.lang, start: S.startMode, wake: S.wakePhrase, restart: S.restartPhrase, mode: S.scrollMode });
     Log.line('script', S.script.replace(/\s+/g, ' ').slice(0, 3000));
     y = 0; goTop(); y = targetY;
     setMode('ready');
