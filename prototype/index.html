@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0d10">
+<title>Prompter Prototype</title>
+<style>
+  :root {
+    --bg: #0b0d10; --panel: #15191f; --line: #262c35; --text: #e8ecf1; --muted: #8a94a3;
+    --accent: #4ea1ff; --ok: #3ccf8e; --warn: #f5b84a; --bad: #ff6b6b;
+    --read: #5b6472; --cur: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  button { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:active { transform: scale(.97); }
+  .hidden { display: none !important; }
+
+  /* Editor */
+  #editor { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 22px; margin: 4px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+  textarea { width: 100%; min-height: 260px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; font-size: 16px; line-height: 1.5; resize: vertical; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 16px 0; }
+  .field { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .field input[type=text], .field select { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  .field input[type=range] { width: 100%; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .val { color: var(--muted); font-size: 13px; }
+  .notice { border-radius: 10px; padding: 10px 12px; margin: 8px 0; font-size: 14px; }
+  .notice.warn { background: #3a2d12; color: var(--warn); }
+  .notice.bad { background: #3a1616; color: var(--bad); }
+  .help { color: var(--muted); font-size: 14px; line-height: 1.55; }
+  .help b { color: var(--text); }
+
+  /* Prompter */
+  #prompter { position: fixed; inset: 0; background: #000; overflow: hidden; touch-action: manipulation; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  #stage.mirror { transform: scaleX(-1); }
+  #text { position: absolute; left: 0; right: 0; top: 0; will-change: transform; font-weight: 600; word-wrap: break-word; }
+  #text .w { color: #f2f2f2; transition: color .25s; cursor: pointer; }
+  #text .w.read { color: var(--read); }
+  #text .w.cur { color: var(--cur); background: rgba(78,161,255,.28); border-radius: .15em; box-shadow: 0 0 0 .08em rgba(78,161,255,.28); }
+  #readline { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid rgba(78,161,255,.55); pointer-events: none; }
+  #readline::before { content: ""; position: absolute; left: 6px; top: -9px; border: 8px solid transparent; border-left: 12px solid var(--accent); }
+
+  #hud { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center;
+    padding: calc(env(safe-area-inset-top) + 8px) 12px 8px; background: linear-gradient(#000d, #0000); font-size: 14px; pointer-events: none; gap: 8px; }
+  .pill { padding: 5px 10px; border-radius: 999px; background: #1b2028; border: 1px solid var(--line); white-space: nowrap; }
+  .pill.ready { color: var(--warn); } .pill.running { color: var(--ok); } .pill.paused { color: var(--muted); } .pill.count { color: var(--accent); }
+  #mic.on { color: var(--ok); } #mic.off { color: var(--bad); }
+  #debug { position: absolute; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 70px); font-size: 13px; color: var(--muted);
+    background: #000a; border-radius: 8px; padding: 6px 10px; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #controls { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+    padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px); background: linear-gradient(#0000, #000d); transition: opacity .3s; }
+  #controls.dim { opacity: .12; }
+  #controls button { background: #1b2028cc; }
+  #overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;
+    background: #000c; text-align: center; padding: 24px; gap: 14px; }
+  #overlay .big { font-size: 96px; font-weight: 700; }
+  #overlay .msg { font-size: 20px; color: var(--muted); max-width: 520px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<!-- ============ EDITOR ============ -->
+<div id="editor">
+  <h1>Prompter, voice tracking prototype</h1>
+  <div class="sub">Phase 1 test build. Script and settings are saved on this device only.</div>
+
+  <div id="support"></div>
+
+  <textarea id="script" spellcheck="false" placeholder="Paste your script here"></textarea>
+
+  <div class="grid">
+    <div class="field"><label>Scroll mode</label>
+      <select id="scrollMode"><option value="voice">Voice tracking</option><option value="manual">Fixed speed</option></select></div>
+    <div class="field"><label>Speech language</label>
+      <select id="lang">
+        <option value="en-IN">English (India)</option><option value="en-US">English (US)</option>
+        <option value="en-GB">English (UK)</option><option value="hi-IN">Hindi (early, phase 4)</option>
+      </select></div>
+    <div class="field"><label>Take starts by</label>
+      <select id="startMode">
+        <option value="wake+firstline">Wake phrase or first line</option>
+        <option value="wake">Wake phrase only</option>
+        <option value="firstline">Speaking the first line</option>
+        <option value="auto">Immediately on open</option>
+      </select></div>
+    <div class="field"><label>Wake phrase (start / resume)</label><input type="text" id="wakePhrase"></div>
+    <div class="field"><label>Restart phrase (new take)</label><input type="text" id="restartPhrase"></div>
+    <div class="field"><label>Pause phrase</label><input type="text" id="stopPhrase"></div>
+    <div class="field"><label>Font size <span class="val" id="fontSizeV"></span></label><input type="range" id="fontSize" min="24" max="120" step="2"></div>
+    <div class="field"><label>Line spacing <span class="val" id="lineHeightV"></span></label><input type="range" id="lineHeight" min="1" max="2.2" step="0.05"></div>
+    <div class="field"><label>Side margin <span class="val" id="marginV"></span></label><input type="range" id="margin" min="0" max="30" step="1"></div>
+    <div class="field"><label>Reading line <span class="val" id="readingLineV"></span></label><input type="range" id="readingLine" min="10" max="70" step="1"></div>
+    <div class="field"><label>Fixed speed <span class="val" id="speedV"></span></label><input type="range" id="speed" min="10" max="300" step="5"></div>
+    <div class="field"><label>Options</label>
+      <div class="row"><label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="mirror"> Mirror</label>
+      <label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="showDebug"> Show what it hears</label></div></div>
+  </div>
+
+  <div id="warnings"></div>
+  <div class="row" style="margin:6px 0 22px"><button class="primary" id="open">Open prompter</button><button id="sample">Load sample script</button></div>
+
+  <div class="help">
+    <b>How to test:</b> open the prompter and tap <b>Mic on</b> once (the browser asks for microphone permission).
+    Then say the wake phrase, or just start reading the first line. Try these on purpose:
+    add a few lines of your own, change some words, repeat a line two or three times, skip a sentence, go back to an earlier line.
+    The text should wait while you go off script and catch up when you come back.
+    When you finish the last line and stop for 2 seconds, the take ends and the script returns to the top, ready for the next take.
+    Say the restart phrase after a short pause to begin a fresh take at any time. Tap any word to jump there.
+    Keyboard: Space start or pause, R restart, Esc back.
+  </div>
+</div>
+
+<!-- ============ PROMPTER ============ -->
+<div id="prompter" class="hidden">
+  <div id="stage"><div id="text"></div></div>
+  <div id="readline"></div>
+  <div id="hud">
+    <span class="pill" id="mode">Ready</span>
+    <span class="pill" id="take">Take 1</span>
+    <span class="pill" id="mic">Mic off</span>
+  </div>
+  <div id="debug" class="hidden"></div>
+  <div id="controls">
+    <button id="bMic">Mic on</button>
+    <button id="bPlay">Start</button>
+    <button id="bRestart">Restart</button>
+    <button id="bBack">Back</button>
+  </div>
+  <div id="overlay" class="hidden"><div class="big" id="ovBig"></div><div class="msg" id="ovMsg"></div></div>
+</div>
+
+<script src="core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var Core = window.PrompterCore;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var SAMPLE = "Hello everyone and welcome back to the channel. Today we are going to talk about three simple habits " +
+    "that can change the way you study.\n\nThe first habit is planning your day the night before. When you plan ahead, " +
+    "you wake up with a clear goal.\n\nThe second habit is taking short breaks every 45 minutes. Your brain needs rest " +
+    "to remember what you learned.\n\nThe third habit is revising before you sleep. Start with these three habits and " +
+    "see the difference in just two weeks. Thanks for watching, see you in the next video.";
+
+  var DEFAULTS = {
+    script: SAMPLE, scrollMode: 'voice', lang: 'en-IN', startMode: 'wake+firstline',
+    wakePhrase: 'prompter go', restartPhrase: 'prompter restart', stopPhrase: 'prompter pause',
+    fontSize: 56, lineHeight: 1.45, margin: 8, readingLine: 30, speed: 60, mirror: false, showDebug: true
+  };
+  var KEY = 'tp_proto_v1';
+  var S = Object.assign({}, DEFAULTS);
+  try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  /* ---------------- Editor ---------------- */
+  var FIELDS = ['scrollMode', 'lang', 'startMode', 'wakePhrase', 'restartPhrase', 'stopPhrase',
+    'fontSize', 'lineHeight', 'margin', 'readingLine', 'speed', 'mirror', 'showDebug'];
+  var UNITS = { fontSize: 'px', lineHeight: '', margin: '%', readingLine: '% from top', speed: ' px/s' };
+  $('script').value = S.script;
+  FIELDS.forEach(function (f) {
+    var el = $(f);
+    if (el.type === 'checkbox') el.checked = !!S[f]; else el.value = S[f];
+    var sync = function () {
+      S[f] = el.type === 'checkbox' ? el.checked : (el.type === 'range' ? parseFloat(el.value) : el.value);
+      if ($(f + 'V')) $(f + 'V').textContent = S[f] + (UNITS[f] || '');
+      save(); checkWarnings();
+    };
+    el.addEventListener('input', sync); el.addEventListener('change', sync);
+    if ($(f + 'V')) $(f + 'V').textContent = S[f] + (UNITS[f] || '');
+  });
+  $('script').addEventListener('input', function () { S.script = $('script').value; save(); checkWarnings(); });
+  $('sample').onclick = function () { $('script').value = S.script = SAMPLE; save(); checkWarnings(); };
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) $('support').innerHTML = '<div class="notice bad">This browser has no speech recognition. Use Safari on iPad, or Chrome on Android or laptop. Fixed speed mode still works.</div>';
+  else if (!window.isSecureContext) $('support').innerHTML = '<div class="notice bad">The microphone only works over https. Open this page from its https link.</div>';
+
+  function checkWarnings() {
+    var toks = Core.tokenizeScript(S.script).tokens, w = [];
+    [['wakePhrase', 'Wake'], ['restartPhrase', 'Restart'], ['stopPhrase', 'Pause']].forEach(function (p) {
+      if (S[p[0]] && Core.scriptContainsPhrase(toks, S[p[0]]))
+        w.push('<div class="notice warn">' + p[1] + ' phrase "' + escapeHtml(S[p[0]]) + '" appears in this script. Pick a phrase you never say in scripts.</div>');
+    });
+    $('warnings').innerHTML = w.join('');
+  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  checkWarnings();
+
+  /* ---------------- Prompter state ---------------- */
+  var T = [], words = [], spans = [];
+  var pos = 0;            // next expected token index
+  var mode = 'ready';     // ready | countdown | running | paused
+  var take = 1;
+  var y = 0, targetY = 0; // scroll offset (px)
+  var lastHeardAt = 0, lastMatchAt = 0, endPending = false;
+  var wakeLock = null;
+  var ovMic = false;
+
+  function buildText() {
+    var tk = Core.tokenizeScript(S.script);
+    T = tk.tokens; words = tk.words;
+    var html = [], raw = S.script.split(/(\s+)/), wi = 0;
+    raw.forEach(function (part) {
+      if (!part) return;
+      if (/^\s+$/.test(part)) { html.push(/\n\s*\n/.test(part) ? '<br><br>' : (/\n/.test(part) ? '<br>' : ' ')); return; }
+      html.push('<span class="w" data-i="' + wi + '">' + escapeHtml(part) + '</span>'); wi++;
+    });
+    var el = $('text');
+    el.innerHTML = html.join('');
+    el.style.fontSize = S.fontSize + 'px';
+    el.style.lineHeight = S.lineHeight;
+    el.style.padding = '0 ' + S.margin + '%';
+    $('stage').classList.toggle('mirror', !!S.mirror);
+    $('readline').style.top = S.readingLine + '%';
+    $('debug').classList.toggle('hidden', !S.showDebug);
+    spans = Array.prototype.slice.call(el.querySelectorAll('.w'));
+  }
+
+  function curWordIdx() { return pos > 0 ? T[Math.min(pos, T.length) - 1].w : -1; }
+
+  function paint() {
+    var cw = curWordIdx();
+    for (var i = 0; i < spans.length; i++) {
+      var c = i < cw ? 'w read' : (i === cw ? 'w cur' : 'w');
+      if (spans[i].className !== c) spans[i].className = c;
+    }
+    // keep the next word to read on the reading line
+    var nextW = pos < T.length ? T[pos].w : (spans.length - 1);
+    var sp = spans[Math.max(0, nextW)];
+    if (sp && S.scrollMode === 'voice') {
+      var lineY = $('prompter').clientHeight * S.readingLine / 100;
+      targetY = sp.offsetTop - lineY + sp.offsetHeight * 0.5;
+    }
+  }
+
+  function setMode(m) {
+    mode = m;
+    var el = $('mode');
+    var label = { ready: 'Ready', countdown: 'Starting', running: 'Running', paused: 'Paused' }[m];
+    if (m === 'ready' && S.scrollMode === 'voice') {
+      var hints = [];
+      if (S.startMode.indexOf('wake') >= 0) hints.push('say "' + S.wakePhrase + '"');
+      if (S.startMode.indexOf('firstline') >= 0) hints.push('read line 1');
+      if (hints.length) label += ': ' + hints.join(' or ');
+    }
+    el.textContent = label;
+    el.className = 'pill ' + (m === 'countdown' ? 'count' : m);
+    $('bPlay').textContent = m === 'running' ? 'Pause' : 'Start';
+    $('controls').classList.toggle('dim', m === 'running' || m === 'countdown');
+    resetHeard();
+  }
+
+  function goTop() { pos = 0; endPending = false; paint(); if (S.scrollMode === 'manual') targetY = y = -($('prompter').clientHeight * S.readingLine / 100); }
+
+  function startTake(withCountdown) {
+    if (!withCountdown) { setMode('running'); return; }
+    setMode('countdown');
+    var n = 3;
+    showOverlay(String(n), 'Take ' + take);
+    var t = setInterval(function () {
+      n--;
+      if (mode !== 'countdown') { clearInterval(t); hideOverlay(); return; }
+      if (n > 0) { showOverlay(String(n), 'Take ' + take); return; }
+      clearInterval(t); hideOverlay(); setMode('running');
+    }, 800);
+  }
+
+  function finishTake() {
+    showOverlay('✓', 'Take ' + take + ' done. Back to the top for the next take.');
+    take++; $('take').textContent = 'Take ' + take;
+    setMode('ready');
+    setTimeout(function () { goTop(); hideOverlay(); }, 1400);
+  }
+
+  function restartTake() {
+    if (mode === 'running' || mode === 'paused' || pos > 0) { take++; $('take').textContent = 'Take ' + take; }
+    goTop();
+    startTake(true);
+  }
+
+  function togglePlay() {
+    if (mode === 'running') setMode('paused');
+    else if (mode === 'ready' || mode === 'paused') startTake(mode === 'ready');
+  }
+
+  function showOverlay(big, msg) { $('ovBig').textContent = big; $('ovMsg').textContent = msg || ''; $('overlay').classList.remove('hidden'); }
+  function hideOverlay() { $('overlay').classList.add('hidden'); }
+
+  /* ---------------- Speech ---------------- */
+  var rec = null, listening = false;
+  var base = [], sessFinal = [], sessAll = [];
+  var mark = 0, prevLen = 0, utterStart = 0;
+
+  function heardAll() { return base.concat(sessAll); }
+  function resetHeard() { mark = heardAll().length; utterStart = mark; prevLen = mark; }
+
+  function micOn() {
+    if (!SR) { showOverlay('!', 'Speech recognition is not available in this browser.'); setTimeout(hideOverlay, 2500); return; }
+    if (listening) return;
+    listening = true; startRec(); updateMic();
+  }
+  function micOff() { listening = false; if (rec) try { rec.stop(); } catch (e) {} updateMic(); }
+  function updateMic() { var m = $('mic'); m.textContent = listening ? 'Mic on' : 'Mic off'; m.className = 'pill ' + (listening ? 'on' : 'off'); $('bMic').textContent = listening ? 'Mic off' : 'Mic on'; m.id = 'mic'; }
+
+  function startRec() {
+    rec = new SR();
+    rec.lang = S.lang; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    rec.onresult = function (e) {
+      var fin = [], all = [];
+      for (var i = 0; i < e.results.length; i++) {
+        var toks = Core.tokenizeSpeech(e.results[i][0].transcript);
+        if (e.results[i].isFinal) fin = fin.concat(toks);
+        all = all.concat(toks);
+      }
+      sessFinal = fin; sessAll = all;
+      onSpeech();
+    };
+    rec.onerror = function (e) {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        listening = false; updateMic();
+        showOverlay('!', 'Microphone permission was denied. Allow it in the browser settings and tap Mic on again.');
+        setTimeout(hideOverlay, 3500);
+      }
+    };
+    rec.onend = function () {
+      base = base.concat(sessFinal); sessFinal = []; sessAll = [];
+      if (base.length > 600) { var cut = base.length - 300; base = base.slice(cut); mark = Math.max(0, mark - cut); utterStart = Math.max(0, utterStart - cut); prevLen = Math.max(0, prevLen - cut); }
+      if (listening) setTimeout(function () { if (listening) try { rec.start(); } catch (err) { startRec(); } }, 120);
+    };
+    try { rec.start(); } catch (e) {}
+  }
+
+  function onSpeech() {
+    var now = performance.now();
+    var all = heardAll();
+    // the recognizer revised or restarted its results: everything in this session is new speech
+    if (all.length < mark) mark = base.length;
+    if (utterStart > all.length) utterStart = mark;
+    if (now - lastHeardAt > 1200) utterStart = Math.max(mark, prevLen); // a new utterance began after a pause
+    lastHeardAt = now;
+    prevLen = all.length;
+
+    var utter = all.slice(Math.max(mark, utterStart));
+    var tail = all.slice(Math.max(mark, all.length - 8));
+    debug(tail);
+
+    if (S.scrollMode !== 'voice') return;
+
+    // Commands. While running, a command counts only if it is said alone after a pause.
+    if (S.restartPhrase && Core.isPhrase(utter, S.restartPhrase)) { restartTake(); return; }
+    if (mode === 'running') {
+      if (S.stopPhrase && Core.isPhrase(utter, S.stopPhrase)) { setMode('paused'); return; }
+    } else if (mode === 'ready' || mode === 'paused') {
+      var wakeAllowed = mode === 'paused' || S.startMode.indexOf('wake') >= 0;
+      if (S.wakePhrase && wakeAllowed && Core.endsWithPhrase(tail, S.wakePhrase)) {
+        startTake(mode === 'ready'); return;
+      }
+      if (mode === 'ready' && (S.startMode === 'firstline' || S.startMode === 'wake+firstline')) {
+        var r0 = Core.locate(T, tail, 0, { window: [0, 15] });
+        if (r0 && r0.score >= 2.6) { setMode('running'); pos = r0.pos; paint(); lastMatchAt = now; }
+      }
+      return;
+    }
+
+    if (mode !== 'running') return;
+    var r = Core.locate(T, tail, pos);
+    if (r) {
+      pos = r.pos; lastMatchAt = now; paint();
+      if (pos >= T.length - 1) endPending = true;
+    }
+  }
+
+  function debug(tail) {
+    if (!S.showDebug) return;
+    $('debug').textContent = 'Hearing: ' + tail.map(function (t) { return t.t; }).join(' ');
+  }
+
+  /* ---------------- Loop ---------------- */
+  var lastFrame = 0;
+  function frame(ts) {
+    var dt = lastFrame ? Math.min(0.1, (ts - lastFrame) / 1000) : 0; lastFrame = ts;
+    if ($('prompter').classList.contains('hidden')) { lastFrame = 0; return; }
+    if (S.scrollMode === 'manual') {
+      if (mode === 'running') targetY += S.speed * dt;
+      var maxY = $('text').scrollHeight - $('prompter').clientHeight * S.readingLine / 100;
+      if (targetY > maxY && mode === 'running') { targetY = maxY; finishTake(); }
+      y = targetY;
+    } else {
+      y += (targetY - y) * Math.min(1, dt * 6);
+      var now = performance.now();
+      if (mode === 'running' && pos >= T.length - 3 && (endPending ? now - lastHeardAt > 2000 : now - lastHeardAt > 3500)) finishTake();
+    }
+    $('text').style.transform = 'translate3d(0,' + (-y).toFixed(1) + 'px,0)';
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------------- Wiring ---------------- */
+  function openPrompter() {
+    S.script = $('script').value; save();
+    $('editor').classList.add('hidden'); $('prompter').classList.remove('hidden');
+    buildText(); take = 1; $('take').textContent = 'Take 1';
+    y = 0; goTop(); y = targetY;
+    setMode('ready');
+    updateMic();
+    requestAnimationFrame(frame);
+    if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () {});
+    if (S.scrollMode === 'voice' && S.startMode === 'auto') startTake(true);
+    if (S.scrollMode === 'voice' && SR && !listening) { ovMic = true; showOverlay('🎙', 'Tap anywhere to turn on the microphone. After that it stays hands free.'); }
+  }
+  function closePrompter() {
+    micOff(); setMode('ready');
+    if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+    $('prompter').classList.add('hidden'); $('editor').classList.remove('hidden'); hideOverlay();
+  }
+
+  $('open').onclick = openPrompter;
+  $('bBack').onclick = closePrompter;
+  $('bMic').onclick = function () { if (listening) micOff(); else { hideOverlay(); micOn(); } };
+  $('bPlay').onclick = togglePlay;
+  $('bRestart').onclick = restartTake;
+  $('overlay').onclick = function () {
+    if (mode === 'countdown') return;
+    hideOverlay();
+    if (ovMic) { ovMic = false; micOn(); }
+  };
+  $('text').addEventListener('click', function (e) {
+    var w = e.target.closest('.w'); if (!w) return;
+    var wi = +w.dataset.i;
+    for (var i = 0; i < T.length; i++) if (T[i].w >= wi) { pos = i; break; }
+    endPending = false; resetHeard(); paint();
+  });
+  document.addEventListener('keydown', function (e) {
+    if ($('prompter').classList.contains('hidden')) return;
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+    else if (e.key === 'r' || e.key === 'R') restartTake();
+    else if (e.key === 'Escape') closePrompter();
+  });
+  window.addEventListener('resize', function () { if (!$('prompter').classList.contains('hidden')) paint(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && wakeLock === null && navigator.wakeLock && !$('prompter').classList.contains('hidden'))
+      navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () {});
+  });
+})();
+</script>
+</body>
+</html>
