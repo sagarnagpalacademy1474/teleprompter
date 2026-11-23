@@ -104,8 +104,10 @@
       n.replace(/[a-z]+|\d+/g, function (p) { out = out.concat(/\d/.test(p) && p.length <= 6 ? numToWords(+p) : [p]); return p; });
       return out;
     }
-    return [n];
+    return [ALIAS[n] || n];
   }
+  // Hinglish spellings of the same word ("mei", "men", "mein" are all में)
+  var ALIAS = { mei: 'mein', men: 'mein', mai: 'main', nahin: 'nahi', nai: 'nahi', nhi: 'nahi' };
 
   // Script -> { words: [raw display words], tokens: [{t, key, w}] } where w = display word index.
   function tokenizeScript(text) {
@@ -133,6 +135,7 @@
     return w
       .replace(/igh/g, 'i').replace(/ght/g, 't')      // English spellings: highlight, night
       .replace(/[ts]ion/g, 'shn')                    // tension / टेंशन, celebration / सेलिब्रेशन
+      .replace(/([aeiou]{2})n$/, '$1')                 // nasal endings: nahiin/nahi, hain/hai
       .replace(/ph/g, 'f').replace(/ck/g, 'k').replace(/q/g, 'k').replace(/c(?=[eiy])/g, 's').replace(/c/g, 'k')
       .replace(/z/g, 'j').replace(/w/g, 'v').replace(/x/g, 'ks').replace(/n(?=[pb])/g, 'm')
       .replace(/(.)\1+/g, '$1')         // collapse doubles: "aaj" -> "aj"
@@ -271,7 +274,16 @@
     var keySim = KL >= 4 ? 1 - lev(ka, kb) / KL : 0;
     return Math.max(textSim, keySim);
   }
-  function matchesAt(toks, P) { return phraseSim(toks, P) >= 0.75; }
+  function matchesAt(toks, P) {
+    if (phraseSim(toks, P) >= 0.75) return true;
+    // one stray short sound in between ("prompter previous" -> "प्रोम को प्रीवियस")
+    if (toks.length === P.length + 1 && P.length >= 2) {
+      for (var i = 1; i < toks.length - 1; i++) {
+        if (toks[i].t.length <= 2 && phraseSim(toks.slice(0, i).concat(toks.slice(i + 1)), P) >= 0.75) return true;
+      }
+    }
+    return false;
+  }
 
   function endsWithPhrase(spoken, phrase) {
     return alternatives(phrase).some(function (P) {
@@ -289,6 +301,16 @@
     });
   }
 
+  // Only the alternatives that start with "prompter": distinctive enough to be heard
+  // in the middle of reading a script, so they work at any time.
+  function strongAlternatives(phrase) {
+    return String(phrase || '').split(',').filter(function (p) { return /^\s*prompter\b/i.test(p); }).join(',');
+  }
+  function endsWithStrong(spoken, phrase) {
+    var st = strongAlternatives(phrase);
+    return !!st && endsWithPhrase(spoken, st);
+  }
+
   // Does any alternative appear in the script? (warn the user)
   function scriptContainsPhrase(tokens, phrase) {
     return alternatives(phrase).some(function (P) {
@@ -300,11 +322,11 @@
     });
   }
 
-  var VERSION = '2026-11-22.9';
+  var VERSION = '2026-11-23.1';
   var api = {
     VERSION: VERSION,
     tokenizeScript: tokenizeScript, tokenizeSpeech: tokenizeSpeech, locate: locate,
-    endsWithPhrase: endsWithPhrase, isPhrase: isPhrase, scriptContainsPhrase: scriptContainsPhrase,
+    endsWithPhrase: endsWithPhrase, endsWithStrong: endsWithStrong, isPhrase: isPhrase, scriptContainsPhrase: scriptContainsPhrase,
     normWord: normWord, phoneticKey: phoneticKey, deva2roman: deva2roman, sim: sim, DEFAULTS: DEFAULTS
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

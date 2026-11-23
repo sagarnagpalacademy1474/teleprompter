@@ -161,3 +161,16 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 60px; }
 .drive-box .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .drive-box input { width: 100%; margin-top: 6px; }
 .drive-box .err { color: var(--bad); }
+
+/* prompter: scripts in this folder */
+#pControls button:disabled { opacity: .35; }
+#pList { position: absolute; right: 12px; bottom: 64px; width: min(420px, calc(100% - 24px)); max-height: 60vh; overflow-y: auto;
+  background: #161a20f2; border: 1px solid #2a313b; border-radius: 14px; padding: 8px; z-index: 6; }
+#pList .phead { color: #8b95a4; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding: 6px 8px; }
+#pList button { display: block; width: 100%; text-align: left; background: transparent; border: 0; color: #e9edf2; padding: 10px 10px; border-radius: 8px; }
+#pList button.on { background: #1f6fd633; color: #fff; font-weight: 600; }
+.ed-nav { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; margin: -4px 0 10px; font-size: 14px; }
+.ed-nav button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); padding: 6px 4px; }
+.ed-nav button:first-child { text-align: left; }
+.ed-nav button:last-child { text-align: right; }
+.ed-nav .muted { font-size: 13px; }

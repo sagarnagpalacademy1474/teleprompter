@@ -1,5 +1,8 @@
 /* Prompter screen: voice tracking, fixed-speed scroll, takes and voice commands.
- * Prompter.open({ script, settings, onClose(adjusted) })  settings = effective values from Settings.resolve
+ * Prompter.open({ script, settings, onClose(adjusted, script), nav })  settings = effective values from Settings.resolve
+ * nav (optional) moves between scripts of the same folder without leaving the prompter (the mic stays on):
+ *   { step(dir, id) -> {script, settings} | null, get(id) -> same, list() -> [{id, title}],
+ *     leave(oldScript, adjusted), shown(newScript) }
  */
 (function (root) {
   'use strict';
@@ -8,7 +11,7 @@
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-  var S = {}, script = null, onClose = null, adjusted = {};
+  var S = {}, script = null, onClose = null, adjusted = {}, nav = null;
   var T = [], words = [], spans = [];
   var pos = 0, mode = 'ready', take = 1, y = 0, targetY = 0;
   var lastHeardAt = 0, endPending = false, wakeLock = null, ovMic = false, isOpen = false;
@@ -192,10 +195,15 @@
     lastTail = tail; renderDiag();
     if (S.scrollMode !== 'voice' || !isOpen) return;
 
-    if (S.restartPhrase && Core.isPhrase(utter, S.restartPhrase)) { Log.line('cmd', 'restart'); restartTake(); return; }
+    if (mode === 'countdown') return;
+    // "prompter ..." commands work at any time, even in the middle of a script;
+    // the other phrases ("phir se shuru") only when said on their own after a pause.
+    if (S.restartPhrase && (Core.endsWithStrong(tail, S.restartPhrase) || Core.isPhrase(utter, S.restartPhrase))) { Log.line('cmd', 'restart'); restartTake(); return; }
     if (mode === 'running') {
-      if (S.stopPhrase && Core.isPhrase(utter, S.stopPhrase)) { Log.line('cmd', 'pause'); setMode('paused'); return; }
+      if (S.stopPhrase && (Core.endsWithStrong(tail, S.stopPhrase) || Core.isPhrase(utter, S.stopPhrase))) { Log.line('cmd', 'pause'); setMode('paused'); return; }
     } else if (mode === 'ready' || mode === 'paused') {
+      if (nav && S.nextPhrase && Core.endsWithPhrase(tail, S.nextPhrase)) { Log.line('cmd', 'next'); switchScript(1); return; }
+      if (nav && S.prevPhrase && Core.endsWithPhrase(tail, S.prevPhrase)) { Log.line('cmd', 'prev'); switchScript(-1); return; }
       var wakeAllowed = mode === 'paused' || S.startMode.indexOf('wake') >= 0;
       if (S.wakePhrase && wakeAllowed && Core.endsWithPhrase(tail, S.wakePhrase)) { Log.line('cmd', 'wake'); startTake(mode === 'ready'); return; }
       if (mode === 'ready' && (S.startMode === 'firstline' || S.startMode === 'wake+firstline')) {
@@ -247,19 +255,60 @@
     $('pFontVal').textContent = S.fontSize;
   }
 
-  /* ---------------- Open / close ---------------- */
-  function open(opts) {
-    script = opts.script; S = Object.assign({}, opts.settings); onClose = opts.onClose; adjusted = {};
-    isOpen = true;
-    $('prompter').classList.remove('hidden');
-    document.body.classList.add('prompting');
+  /* ---------------- Scripts in the same folder ---------------- */
+  function load(sc, settings) {
+    var oldLang = S.lang;
+    script = sc; S = Object.assign({}, settings); adjusted = {};
     $('pTitle').textContent = script.title;
     $('pFontVal').textContent = S.fontSize;
-    buildText(); setTake(1);
+    buildText(); setTake(1); endPending = false;
     Log.line('session', { build: root.BUILD, core: Core.VERSION, ua: navigator.userAgent, lang: S.lang, start: S.startMode, wake: S.wakePhrase, restart: S.restartPhrase, mode: S.scrollMode, title: script.title });
     Log.line('script', script.body.replace(/\s+/g, ' ').slice(0, 3000));
     y = 0; goTop(); y = targetY;
     mode = ''; setMode('ready');
+    // a script in another language: restart the mic in that language
+    if (listening && rec && oldLang && oldLang !== S.lang) { diag.lang = ''; try { rec.stop(); } catch (e) {} }
+    updateNav(); closeList();
+  }
+  function updateNav() {
+    var has = !!nav;
+    ['pPrev', 'pNext', 'pListBtn'].forEach(function (id) { $(id).classList.toggle('hidden', !has); });
+    if (!has) return;
+    $('pPrev').disabled = !nav.step(-1, script.id);
+    $('pNext').disabled = !nav.step(1, script.id);
+  }
+  function switchScript(dir, id) {
+    if (!nav || mode === 'running' || mode === 'countdown') return;
+    var n = id ? nav.get(id) : nav.step(dir, script.id);
+    if (!n) {
+      showOverlay(dir > 0 ? '⏭' : '⏮', dir > 0 ? 'This is the last script in this folder.' : 'This is the first script in this folder.');
+      setTimeout(hideOverlay, 1600); return;
+    }
+    if (n.script.id === script.id) { closeList(); return; }
+    nav.leave(script, adjusted);
+    load(n.script, n.settings);
+    if (nav.shown) nav.shown(n.script);
+    showOverlay('▶', n.script.title);
+    setTimeout(function () { if (mode === 'ready') hideOverlay(); }, 1300);
+  }
+  function openList() {
+    if (!nav) return;
+    var el = $('pList');
+    el.innerHTML = '<div class="phead">Scripts in this folder</div>' + nav.list().map(function (x) {
+      return '<button data-id="' + esc(x.id) + '"' + (x.id === script.id ? ' class="on"' : '') + '>' + esc(x.title) + '</button>';
+    }).join('');
+    el.classList.remove('hidden');
+    var on = el.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
+  }
+  function closeList() { $('pList').classList.add('hidden'); }
+
+  /* ---------------- Open / close ---------------- */
+  function open(opts) {
+    onClose = opts.onClose; nav = opts.nav || null; S = {};
+    isOpen = true;
+    $('prompter').classList.remove('hidden');
+    document.body.classList.add('prompting');
+    load(opts.script, opts.settings);
     updateMic(); renderDiag();
     requestAnimationFrame(frame);
     if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () {});
@@ -274,8 +323,9 @@
     isOpen = false; mode = 'ready';
     if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
     $('prompter').classList.add('hidden'); document.body.classList.remove('prompting'); hideOverlay();
+    closeList();
     var cb = onClose; onClose = null;
-    if (cb) cb(adjusted);
+    if (cb) cb(adjusted, script);
   }
 
   function wire() {
@@ -285,9 +335,13 @@
     $('pRestart').onclick = restartTake;
     $('pFontDown').onclick = function () { bumpFont(-4); };
     $('pFontUp').onclick = function () { bumpFont(4); };
+    $('pPrev').onclick = function () { switchScript(-1); };
+    $('pNext').onclick = function () { switchScript(1); };
+    $('pListBtn').onclick = function () { if ($('pList').classList.contains('hidden')) openList(); else closeList(); };
+    $('pList').onclick = function (e) { var b = e.target.closest('button[data-id]'); if (b) switchScript(0, b.dataset.id); };
     $('pOverlay').onclick = function () {
       if (mode === 'countdown') return;
-      hideOverlay();
+      hideOverlay(); closeList();
       if (ovMic) { ovMic = false; micOn(); }
     };
     $('pText').addEventListener('click', function (e) {
@@ -300,7 +354,9 @@
       if (!isOpen) return;
       if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
       else if (e.key === 'r' || e.key === 'R') restartTake();
-      else if (e.key === 'Escape') close();
+      else if (e.key === 'Escape') { if (!$('pList').classList.contains('hidden')) closeList(); else close(); }
+      else if (e.key === 'PageDown' || e.key === 'ArrowRight') { e.preventDefault(); switchScript(1); }
+      else if (e.key === 'PageUp' || e.key === 'ArrowLeft') { e.preventDefault(); switchScript(-1); }
     });
     window.addEventListener('resize', function () { if (isOpen) paint(); });
     document.addEventListener('visibilitychange', function () {

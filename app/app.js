@@ -219,6 +219,16 @@
 
   /* ---------------- editor ---------------- */
   var saveTimer = null;
+  // previous / next script in the same folder
+  function edNavHtml(s) {
+    var list = Store.scripts(s.folderId), i = list.map(function (x) { return x.id; }).indexOf(s.id);
+    if (list.length < 2 || i < 0) return '';
+    var p = list[i - 1], n = list[i + 1];
+    return '<div class="ed-nav">' +
+      (p ? '<button class="ghost" data-ednav="' + p.id + '" title="Previous script">&#8249; ' + esc(p.title) + '</button>' : '<span></span>') +
+      '<span class="muted">' + (i + 1) + ' of ' + list.length + '</span>' +
+      (n ? '<button class="ghost" data-ednav="' + n.id + '" title="Next script">' + esc(n.title) + ' &#8250;</button>' : '<span></span>') + '</div>';
+  }
   function renderEditor(id) {
     var s = Store.script(id); if (!s) return go('#/');
     var back = s.folderId ? '#/f/' + s.folderId : '#/';
@@ -228,6 +238,7 @@
       '<button id="edSettings">Script settings' + (n ? ' (' + n + ')' : '') + '</button>' +
       '<button class="icon" id="edMenu" aria-label="More">&#8943;</button>' +
       '<button class="primary" id="edPlay">&#9654; Start prompter</button></div>' +
+      edNavHtml(s) +
       '<div class="ed-meta"><span class="muted">Folder</span><select id="edFolder">' + folderOptions(s.folderId) + '</select>' +
       '<span class="muted" id="edLang"></span></div>' +
       '<textarea id="edBody" spellcheck="false" placeholder="Write or paste your script here">' + esc(s.body) + '</textarea>' +
@@ -258,6 +269,7 @@
     $('edFolder').onchange = function () { save(); stats(); };
     $('edSettings').onclick = function () { save(); settingsDialog('script', Store.script(id)); };
     $('edPlay').onclick = function () { save(); go('#/p/' + id); };
+    view.querySelectorAll('[data-ednav]').forEach(function (b) { b.onclick = function () { save(); go('#/s/' + b.dataset.ednav); }; });
     $('edMenu').onclick = function (e) {
       e.stopPropagation(); save();
       popMenu(e.currentTarget, [
@@ -326,23 +338,45 @@
   }
 
   /* ---------------- prompter route ---------------- */
+  // keep a font size changed with A-/A+ in the prompter for that script
+  function saveAdjusted(sc, adjusted) {
+    var s = Store.script(sc.id); if (!s || !adjusted.fontSize) return;
+    var cur = Settings.resolve(s.folderId, s).values.fontSize;
+    if (cur === adjusted.fontSize) return;
+    Store.updateScript(s.id, { settings: Object.assign({}, s.settings, { fontSize: adjusted.fontSize }) }, true);
+    toast('Font size ' + adjusted.fontSize + 'px saved for "' + s.title + '"');
+  }
+  // the playable scripts of a folder, in the order the folder shows them
+  function playable(folderId) { return Store.scripts(folderId).filter(function (x) { return x.body.trim(); }); }
+  function folderNav(folderId) {
+    function pack(x) { return x ? { script: x, settings: Settings.resolve(x.folderId, x).values } : null; }
+    return {
+      step: function (dir, id) {
+        var list = playable(folderId), i = list.map(function (x) { return x.id; }).indexOf(id);
+        return i < 0 ? null : pack(list[i + dir]);
+      },
+      get: function (id) { return pack(Store.script(id)); },
+      list: function () { return playable(folderId).map(function (x) { return { id: x.id, title: x.title }; }); },
+      leave: function (sc, adjusted) { saveAdjusted(sc, adjusted); },
+      // keep the address and the editor underneath on the script being shown
+      shown: function (sc) {
+        Store.updateScript(sc.id, { openedAt: Date.now() }, true);
+        history.replaceState(null, '', '#/p/' + sc.id);
+        renderEditor(sc.id);
+      }
+    };
+  }
   function openPrompter(id) {
     var s = Store.script(id); if (!s) return go('#/');
     if (!s.body.trim()) { toast('This script is empty'); return go('#/s/' + id); }
     Store.updateScript(id, { openedAt: Date.now() }, true);
     renderEditor(id); // keep the editor underneath
-    Prompter.open({ script: s, settings: Settings.resolve(s.folderId, s).values, onClose: function (adjusted) {
-      if (adjusted.fontSize) {
-        var cur = Settings.resolve(s.folderId, s).values.fontSize;
-        if (cur !== adjusted.fontSize) {
-          var own = Object.assign({}, s.settings, { fontSize: adjusted.fontSize });
-          Store.updateScript(id, { settings: own }, true);
-          toast('Font size ' + adjusted.fontSize + 'px saved for this script');
-        }
-      }
-      if (location.hash === '#/p/' + id) history.replaceState(null, '', '#/s/' + id);
-      render();
-    } });
+    Prompter.open({ script: s, settings: Settings.resolve(s.folderId, s).values, nav: folderNav(s.folderId),
+      onClose: function (adjusted, cur) {
+        saveAdjusted(cur, adjusted);
+        if (/^#\/p\//.test(location.hash)) history.replaceState(null, '', '#/s/' + cur.id);
+        render();
+      } });
   }
 
   /* ---------------- router ---------------- */

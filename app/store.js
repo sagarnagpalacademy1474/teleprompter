@@ -150,8 +150,9 @@
     script: function (id) { return state.scripts[id] || null; },
     scripts: function (folderId) {
       folderId = folderId || null;
+      // by title, numbers in natural order ("2." before "10."), so a numbered series reads in order
       return Object.values(state.scripts).filter(function (s) { return (s.folderId || null) === folderId; })
-        .sort(function (a, b) { return b.updatedAt - a.updatedAt; });
+        .sort(function (a, b) { return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }); });
     },
     allScripts: function () { return Object.values(state.scripts).sort(function (a, b) { return b.updatedAt - a.updatedAt; }); },
     createScript: function (fields) {

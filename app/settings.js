@@ -16,6 +16,8 @@
     { key: 'wakePhrase', group: 'Voice', label: 'Wake phrases (comma separated)', type: 'text', def: 'prompter go, chalo shuru, shuru karte hain' },
     { key: 'restartPhrase', group: 'Voice', label: 'Restart phrases (new take)', type: 'text', def: 'prompter restart, phir se shuru' },
     { key: 'stopPhrase', group: 'Voice', label: 'Pause phrases', type: 'text', def: 'prompter pause, ruk jao prompter' },
+    { key: 'nextPhrase', group: 'Voice', label: 'Next script phrases', type: 'text', def: 'prompter next, agli script' },
+    { key: 'prevPhrase', group: 'Voice', label: 'Previous script phrases', type: 'text', def: 'prompter previous, pichli script' },
 
     { key: 'fontSize', group: 'Text', label: 'Font size', type: 'range', def: 56, min: 24, max: 140, step: 2, unit: 'px' },
     { key: 'lineHeight', group: 'Text', label: 'Line spacing', type: 'range', def: 1.45, min: 1, max: 2.2, step: 0.05, unit: '' },
