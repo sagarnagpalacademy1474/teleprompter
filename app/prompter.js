@@ -6,7 +6,9 @@
  */
 (function (root) {
   'use strict';
-  var Core = root.PrompterCore, Log = root.Log;
+  var Core = root.PrompterCore;
+  // Test logging was removed before going live (Tarun's rule, 2026-11-22). Kept as a no-op hook.
+  var Log = { line: function () {}, flush: function () {} };
   var SR = root.SpeechRecognition || root.webkitSpeechRecognition;
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }

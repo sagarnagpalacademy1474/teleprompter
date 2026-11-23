@@ -31,7 +31,7 @@
   ];
   // Only on the global settings screen
   var GLOBAL_ONLY = [
-    { key: 'sendLogs', group: 'Testing', label: 'Send test logs to Claude', type: 'toggle', def: true }
+
   ];
 
   function defaults() {

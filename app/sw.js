@@ -3,10 +3,10 @@
  * Other app files are versioned (?v=BUILD), so cached copies are safe to serve first.
  * Google sign-in, Drive and logging requests always go to the network.
  */
-var VERSION = '2026-11-23.1';
+var VERSION = '2026-11-23.2';
 var CACHE = 'prompter-' + VERSION;
 var SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'].concat(
-  ['app.css', 'core.js', 'log.js', 'merge.js', 'store.js', 'settings.js', 'sync.js', 'prompter.js', 'app.js'].map(function (f) { return f + '?v=' + VERSION; }));
+  ['app.css', 'core.js', 'merge.js', 'store.js', 'settings.js', 'sync.js', 'prompter.js', 'app.js'].map(function (f) { return f + '?v=' + VERSION; }));
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));

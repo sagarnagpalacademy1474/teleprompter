@@ -124,7 +124,6 @@
     }, function (e) {
       busy = false; if (wasDirty) dirty = true;
       if (e.auth) setState('needs-tap'); else setState('error', navigator.onLine === false || e instanceof TypeError ? 'No internet. Changes are saved on this device and will sync when you are back online.' : e.message);
-      if (root.Log) root.Log.line('sync_error', e.message);
     });
   }
   function schedule(ms) { clearTimeout(timer); timer = setTimeout(syncNow, ms); }

@@ -108,7 +108,7 @@
     <div class="field"><label>Reading line <span class="val" id="readingLineV"></span></label><input type="range" id="readingLine" min="10" max="70" step="1"></div>
     <div class="field"><label>Fixed speed <span class="val" id="speedV"></span></label><input type="range" id="speed" min="10" max="300" step="5"></div>
     <div class="field"><label>Options</label>
-      <div class="row"><label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="mirror"> Mirror</label>
+      <div class="row"><label class="row" hidden style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="mirror"> Mirror</label>
       <label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="showDebug"> Show what it hears</label>
       <label class="row" style="text-transform:none;color:var(--text);font-size:15px;margin:0"><input type="checkbox" id="sendLogs"> Send test logs to Claude</label></div></div>
   </div>
@@ -324,35 +324,8 @@
   function showOverlay(big, msg) { $('ovBig').textContent = big; $('ovMsg').textContent = msg || ''; $('overlay').classList.remove('hidden'); }
   function hideOverlay() { $('overlay').classList.add('hidden'); }
 
-  /* ---------------- Test logs ----------------
-   * Every mic result, match, mode change and error goes to a private Google Sheet (via a Google Form)
-   * so Claude can see exactly what the iPad heard against the script. Turn off with "Send test logs".
-   */
-  var LOG_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScsDbEAiqqVBCB9FCTZHlUB19egytCcdDsVgIRAecCd7GCYgg/formResponse';
-  var LOG_FIELD = 'entry.1536478842';
-  var Log = (function () {
-    var sid = Math.random().toString(36).slice(2, 8), seq = 0, buf = [], t0 = Date.now(), timer = null;
-    function line(ev, data) {
-      if (!S.sendLogs) return;
-      buf.push(((Date.now() - t0) / 1000).toFixed(2) + ' ' + ev + (data !== undefined ? ' ' + (typeof data === 'string' ? data : JSON.stringify(data)) : ''));
-      if (!timer) timer = setTimeout(flush, 4000);
-      if (buf.length > 150) flush();
-    }
-    function flush(useBeacon) {
-      clearTimeout(timer); timer = null;
-      if (!buf.length) return;
-      var body = 'sid=' + sid + ' seq=' + (seq++) + ' at=' + new Date().toISOString() + '\n' + buf.join('\n');
-      buf = [];
-      var params = new URLSearchParams(); params.append(LOG_FIELD, body.slice(0, 40000));
-      try {
-        if (useBeacon && navigator.sendBeacon) navigator.sendBeacon(LOG_URL, params);
-        else fetch(LOG_URL, { method: 'POST', mode: 'no-cors', body: params }).catch(function () {});
-      } catch (e) {}
-    }
-    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(true); });
-    window.addEventListener('pagehide', function () { flush(true); });
-    return { line: line, flush: flush, sid: sid };
-  })();
+  // Test logging was removed before going live (Tarun's rule, 2026-11-22).
+  var Log = { line: function () {}, flush: function () {} };
 
   /* ---------------- Speech ---------------- */
   var rec = null, listening = false;

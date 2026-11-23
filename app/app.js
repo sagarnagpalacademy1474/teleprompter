@@ -429,7 +429,6 @@
 
   /* ---------------- boot ---------------- */
   Settings.defaultsMerged = function () { return Object.assign(Settings.defaults(), Store.getGlobal()); };
-  root.Log.setEnabled(function () { return Settings.defaultsMerged().sendLogs !== false; });
   Prompter.wire();
   $('brand').onclick = function () { go('#/'); };
   $('gear').onclick = function () { go('#/settings'); };
