@@ -1,5 +1,5 @@
 // Hinglish (Roman script) tracking against Hindi speech recognition output (Devanagari).
-// Run: node prototype/test-hinglish.js
+// Run: node app/test-hinglish.js
 var C = require('./core.js');
 var fails = 0;
 function check(name, got, want, tol) {
