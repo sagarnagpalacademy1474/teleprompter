@@ -237,6 +237,7 @@
       '<div class="ed-bar"><input type="text" class="ed-title grow" id="edTitle" value="' + esc(s.title) + '" placeholder="Script title">' +
       '<button id="edSettings">Script settings' + (n ? ' (' + n + ')' : '') + '</button>' +
       '<button class="icon" id="edMenu" aria-label="More">&#8943;</button>' +
+      '<button id="edDone" title="Save and go back to the script list">&#10003; Save &amp; Close</button>' +
       '<button class="primary" id="edPlay">&#9654; Start prompter</button></div>' +
       edNavHtml(s) +
       '<div class="ed-meta"><span class="muted">Folder</span><select id="edFolder">' + folderOptions(s.folderId) + '</select>' +
@@ -269,6 +270,8 @@
     $('edFolder').onchange = function () { save(); stats(); };
     $('edSettings').onclick = function () { save(); settingsDialog('script', Store.script(id)); };
     $('edPlay').onclick = function () { save(); go('#/p/' + id); };
+    $('edDone').onclick = function () { save(); var fid = $('edFolder').value; go(fid ? '#/f/' + fid : '#/'); };
+    $('edTitle').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('edBody').focus(); } };
     view.querySelectorAll('[data-ednav]').forEach(function (b) { b.onclick = function () { save(); go('#/s/' + b.dataset.ednav); }; });
     $('edMenu').onclick = function (e) {
       e.stopPropagation(); save();
@@ -278,10 +281,18 @@
       ]);
     };
     stats();
-    if (!s.body) $('edBody').focus();
-    leaveEditor = save;
+    // a new script: put the cursor in the title first, selected, so typing replaces "Untitled script"
+    if (!s.body && s.title === NEW_TITLE) { $('edTitle').focus(); $('edTitle').select(); }
+    else if (!s.body) $('edBody').focus();
+    leaveEditor = function (next) {
+      save();
+      if (!next || next === '#/s/' + id || next === '#/p/' + id) return;
+      // a script left with no text and no name is removed, so the list does not fill up with empty "Untitled script" entries
+      var cur = Store.script(id);
+      if (cur && !cur.body.trim() && (!cur.title.trim() || cur.title === NEW_TITLE)) { Store.deleteScript(id); toast('Empty script removed'); }
+    };
   }
-  var leaveEditor = null;
+  var leaveEditor = null, NEW_TITLE = 'Untitled script';
 
   /* ---------------- global settings ---------------- */
   function renderSettings() {
@@ -366,28 +377,49 @@
       }
     };
   }
-  function openPrompter(id) {
+  function openPrompter(id, from) {
     var s = Store.script(id); if (!s) return go('#/');
     if (!s.body.trim()) { toast('This script is empty'); return go('#/s/' + id); }
     Store.updateScript(id, { openedAt: Date.now() }, true);
     renderEditor(id); // keep the editor underneath
     Prompter.open({ script: s, settings: Settings.resolve(s.folderId, s).values, nav: folderNav(s.folderId),
-      onClose: function (adjusted, cur) {
+      // Back returns to where the prompter was opened from; the Folder button always goes to the script list
+      onClose: function (adjusted, cur, how) {
         saveAdjusted(cur, adjusted);
-        if (/^#\/p\//.test(location.hash)) history.replaceState(null, '', '#/s/' + cur.id);
+        var list = cur.folderId ? '#/f/' + cur.folderId : '#/', dest = '#/s/' + cur.id;
+        if (how === 'folder') dest = list;
+        else if (from && /^#\/search\//.test(from)) dest = from;
+        else if (from && (from === '#/' || /^#\/f\//.test(from))) dest = list;
+        if (/^#\/p\//.test(location.hash)) history.replaceState(null, '', dest);
         render();
       } });
   }
 
   /* ---------------- router ---------------- */
+  // where the Back button goes: one level up (script -> its folder, folder -> parent folder)
+  var curHash = null, lastList = '#/';
+  function upHash(h) {
+    var m;
+    if ((m = h.match(/^#\/f\/(\w+)/))) { var f = Store.folder(m[1]); return f && f.parentId ? '#/f/' + f.parentId : '#/'; }
+    if ((m = h.match(/^#\/s\/(\w+)/))) { var s = Store.script(m[1]); return s && s.folderId ? '#/f/' + s.folderId : '#/'; }
+    return lastList;
+  }
+  function drawNav(h) {
+    var home = h === '#/' || h === '#' || h === '';
+    $('navBack').classList.toggle('hidden', home);
+    $('navHome').classList.toggle('hidden', home);
+  }
   function render() {
     closeMenus();
-    if (leaveEditor) { try { leaveEditor(); } catch (e) {} leaveEditor = null; }
-    var h = location.hash || '#/', m;
+    var h = location.hash || '#/', m, from = curHash;
+    curHash = h;
+    if (leaveEditor) { var le = leaveEditor; leaveEditor = null; try { le(h); } catch (e) {} }
+    if (h === '#/' || /^#\/f\//.test(h)) lastList = h;
+    drawNav(h);
     if (Prompter.isOpen() && !/^#\/p\//.test(h)) Prompter.close();
     if ((m = h.match(/^#\/f\/(\w+)/))) renderLibrary(m[1]);
     else if ((m = h.match(/^#\/s\/(\w+)/))) renderEditor(m[1]);
-    else if ((m = h.match(/^#\/p\/(\w+)/))) { if (!Prompter.isOpen()) openPrompter(m[1]); }
+    else if ((m = h.match(/^#\/p\/(\w+)/))) { if (!Prompter.isOpen()) openPrompter(m[1], from); }
     else if (h === '#/settings') renderSettings();
     else if ((m = h.match(/^#\/search\/(.*)/))) renderSearch(decodeURIComponent(m[1]));
     else renderLibrary(null);
@@ -431,6 +463,8 @@
   Settings.defaultsMerged = function () { return Object.assign(Settings.defaults(), Store.getGlobal()); };
   Prompter.wire();
   $('brand').onclick = function () { go('#/'); };
+  $('navHome').onclick = function () { go('#/'); };
+  $('navBack').onclick = function () { go(upHash(location.hash || '#/')); };
   $('gear').onclick = function () { go('#/settings'); };
   $('syncBtn').onclick = function () {
     var st = root.Sync.status();
@@ -449,7 +483,7 @@
   $('search').oninput = function () {
     clearTimeout(sTimer);
     var q = this.value;
-    sTimer = setTimeout(function () { if (q.trim()) history.replaceState(null, '', '#/search/' + encodeURIComponent(q)), renderSearch(q); else go('#/'); }, 200);
+    sTimer = setTimeout(function () { if (q.trim()) { curHash = '#/search/' + encodeURIComponent(q); history.replaceState(null, '', curHash); drawNav(curHash); renderSearch(q); } else go('#/'); }, 200);
   };
   window.addEventListener('hashchange', render);
   window.addEventListener('pagehide', function () { if (leaveEditor) leaveEditor(); });

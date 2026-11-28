@@ -9,16 +9,18 @@
 <meta name="apple-mobile-web-app-title" content="Prompter">
 <meta name="theme-color" content="#0d1014">
 <title>Prompter</title>
-<script>var BUILD = '2026-11-23.2';</script>
+<script>var BUILD = '2026-11-28.1';</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="app.css?v=2026-11-23.2">
+<link rel="stylesheet" href="app.css?v=2026-11-28.1">
 </head>
 <body>
 
 <header class="top">
   <span class="brand" id="brand">&#127908; <span class="brand-text">Prompter</span></span>
+  <button class="nav-btn hidden" id="navBack" title="Back" aria-label="Back">&#8249; <span class="nav-text">Back</span></button>
+  <button class="nav-btn hidden" id="navHome" title="Home" aria-label="Home">&#127968; <span class="nav-text">Home</span></button>
   <input type="search" class="search" id="search" placeholder="Search all scripts" autocomplete="off">
   <button class="sync-btn" id="syncBtn" title="Google Drive sync"><span class="dot"></span><span id="syncTxt">Drive</span></button>
   <button class="icon" id="gear" title="Settings" aria-label="Settings">&#9881;&#65039;</button>
@@ -44,19 +46,20 @@
     <button id="pPrev" class="hidden" aria-label="Previous script">&#9664;</button>
     <button id="pListBtn" class="hidden" aria-label="Scripts in this folder">&#9776;</button>
     <button id="pNext" class="hidden" aria-label="Next script">&#9654;</button>
+    <button id="pFolder" title="Close and go to the script list">&#128193; Folder</button>
     <button id="pBack">Back</button>
   </div>
   <div id="pList" class="hidden"></div>
   <div id="pOverlay" class="hidden"><div id="pOvBig"></div><div id="pOvMsg"></div></div>
 </div>
 
-<script src="core.js?v=2026-11-23.2"></script>
-<script src="merge.js?v=2026-11-23.2"></script>
-<script src="store.js?v=2026-11-23.2"></script>
-<script src="settings.js?v=2026-11-23.2"></script>
-<script src="sync.js?v=2026-11-23.2"></script>
-<script src="prompter.js?v=2026-11-23.2"></script>
-<script src="app.js?v=2026-11-23.2"></script>
+<script src="core.js?v=2026-11-28.1"></script>
+<script src="merge.js?v=2026-11-28.1"></script>
+<script src="store.js?v=2026-11-28.1"></script>
+<script src="settings.js?v=2026-11-28.1"></script>
+<script src="sync.js?v=2026-11-28.1"></script>
+<script src="prompter.js?v=2026-11-28.1"></script>
+<script src="app.js?v=2026-11-28.1"></script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});</script>
 </body>
 </html>

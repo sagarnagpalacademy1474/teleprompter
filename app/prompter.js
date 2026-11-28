@@ -318,7 +318,7 @@
     if (S.scrollMode === 'voice' && SR && !listening) { ovMic = true; showOverlay('🎙', 'Tap anywhere to turn on the microphone. After that it stays hands free.'); }
     else hideOverlay();
   }
-  function close() {
+  function close(how) {
     if (!isOpen) return;
     Log.line('close'); Log.flush();
     micOff(); clearInterval(countTimer);
@@ -327,11 +327,12 @@
     $('prompter').classList.add('hidden'); document.body.classList.remove('prompting'); hideOverlay();
     closeList();
     var cb = onClose; onClose = null;
-    if (cb) cb(adjusted, script);
+    if (cb) cb(adjusted, script, how === 'folder' ? 'folder' : 'back');
   }
 
   function wire() {
     $('pBack').onclick = function () { close(); };
+    $('pFolder').onclick = function () { close('folder'); };
     $('pMicBtn').onclick = function () { if (listening) micOff(); else { hideOverlay(); ovMic = false; micOn(); } };
     $('pPlay').onclick = togglePlay;
     $('pRestart').onclick = restartTake;
